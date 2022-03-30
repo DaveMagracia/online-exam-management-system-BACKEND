@@ -26,4 +26,4 @@ After nyong ma clone tong backend sa mga computer nyo, eto mga need nyo gawin:
 - wait nyo lang to medyo matagal kasi nag coconnect sa DB
 - punta kayo sa browser then type nyo `localhost:5000`
 - if may lumabas na "Server is working!" ibig sabihin gumagana server
-- btw, if want nyo i-stop yung server pindutin nyo lang CTRL+C sa cmd
+- btw, if want nyo i-stop yung server pindutin nyo lang CTRL+C sa cmd, then Y

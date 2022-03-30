@@ -1,3 +1,2 @@
 /node_modules
-# .env will be included to the repo
-# .env
+.env
