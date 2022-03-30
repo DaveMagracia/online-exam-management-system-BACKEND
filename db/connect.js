@@ -8,4 +8,5 @@ const connectDB = (url) => {
   })
 }
 
+//EXPORT FUNCTION TO BE USED IN SERVER.JS
 module.exports = connectDB

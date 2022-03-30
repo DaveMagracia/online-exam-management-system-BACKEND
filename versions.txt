@@ -2,7 +2,7 @@ GLOBAL
 Node - 16.14.0
 Npm - 8.5.0
 
-NOTE: pwede pa madagdagan dependencies habang nag dedev tayo. 
+pwede pa madagdagan dependencies habang nag dedev 
 pero eto yung importante
 
 FRONTEND
