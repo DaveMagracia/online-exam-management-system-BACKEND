@@ -3,6 +3,7 @@
 #### Annyeong :heart: :heart: :heart:
 
 After nyong ma clone tong backend sa mga computer nyo, eto mga need nyo gawin:
+Nasa pinaka baba yung steps kung pano mag clone/DL
 
 ## STEPS:
 
@@ -35,3 +36,10 @@ MONGO_URI=mongodb+srv://dave:magracia0920@nodeexpressproject.h4j1r.mongodb.net/0
 - punta kayo sa browser then type nyo `localhost:5000`
 - if may lumabas na "Server is working!" ibig sabihin gumagana server
 - btw, if want nyo i-stop yung server pindutin nyo lang CTRL+C sa cmd, then Y
+
+------------
+
+## CLONING:
+1. **Sa cmd, navigate muna kayo sa folder kung san nyo gusto ilagay yung project na to**
+- Run nyo yung command na to `git clone https://github.com/DaveMagracia/online-exam-management-system-BACKEND.git`
+- pagka clone, pwede nyo na buksan yung folder sa VS Code then pwede na kau mag code :>>
