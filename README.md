@@ -23,5 +23,7 @@ After nyong ma clone tong backend sa mga computer nyo, eto mga need nyo gawin:
 
 3. **Pag tapos icheck if pareparehas ng version. pwede na irun tong backend**
 - Sa cmd, run nyo yung command na `npm start`
-- Automatic mag bubukas na yung browser nyo and mapupunta sa localhost
-- If walang lumabas, type nyo nalang sa browser `localhost:3000`
+- wait nyo lang to medyo matagal kasi nag coconnect sa DB
+- punta kayo sa browser then type nyo `localhost:5000`
+- if may lumabas na "Server is working!" ibig sabihin gumagana server
+- btw, if want nyo i-stop yung server pindutin nyo lang CTRL+C sa cmd
