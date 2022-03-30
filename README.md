@@ -21,7 +21,15 @@ After nyong ma clone tong backend sa mga computer nyo, eto mga need nyo gawin:
 
 &nbsp;
 
-3. **Pag tapos icheck if pareparehas ng version. pwede na irun tong backend**
+3. **After mag install, gawa kayo ng bagong file sa ROOT directory ng project na to. Pangalanan nyo ng ".env"**.
+- Sa loob ng file na yun, icopy paste nyo to:
+MONGO_URI=mongodb+srv://dave:magracia0920@nodeexpressproject.h4j1r.mongodb.net/03-TASK-MANAGER?retryWrites=true&w=majority
+- Eto yung URI ng Database natin para makaconnect yung server sa database.
+- Saaking account yang database. Maiiba pa tong URI pag nakagawa na ng account gamit yung ArTech Email
+
+&nbsp;
+
+4. **Pag tapos icheck if pareparehas ng version. pwede na irun tong backend**
 - Sa cmd, run nyo yung command na `npm start`
 - wait nyo lang to medyo matagal kasi nag coconnect sa DB
 - punta kayo sa browser then type nyo `localhost:5000`
