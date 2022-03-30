@@ -1,5 +1,5 @@
 # Web-Based Online Examination Management System (BACKEND)
-------------
+
 #### Annyeong :heart: :heart: :heart:
 
 After nyong ma clone tong backend sa mga computer nyo, eto mga need nyo gawin:
@@ -37,7 +37,8 @@ MONGO_URI=mongodb+srv://dave:magracia0920@nodeexpressproject.h4j1r.mongodb.net/0
 - if may lumabas na "Server is working!" ibig sabihin gumagana server
 - btw, if want nyo i-stop yung server pindutin nyo lang CTRL+C sa cmd, then Y
 
-------------
+&nbsp;
+&nbsp;
 
 ## CLONING:
 1. **Sa cmd, navigate muna kayo sa folder kung san nyo gusto ilagay yung project na to**
