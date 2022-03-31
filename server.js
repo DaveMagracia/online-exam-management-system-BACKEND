@@ -1,11 +1,14 @@
 const express = require('express')
 const cors = require('cors')
 const connectDB = require('./db/connect');
-const app = express();
+const server = express();
 
-// middleware
-app.use(express.static('./public'));
-app.use(express.json());
+// middlewares
+server.use(express.static('./public'));
+//lets express know that incoming requests are in json form
+server.use(express.json());
+//for security measures
+server.use(cors());
 
 require('dotenv').config();
 
@@ -16,9 +19,9 @@ const port = process.env.PORT || 5000;
 const start = async () => {
   try {
     await connectDB(process.env.MONGO_URI);
-    app.listen(port, () =>
+    server.listen(port, () => {
       console.log(`Server is listening on port ${port}...`)
-    );
+    });
   } catch (error) {
     console.log(error);
   }
