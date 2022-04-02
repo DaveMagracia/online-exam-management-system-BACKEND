@@ -1,16 +1,26 @@
+//IMPORTS
 const express = require('express')
 const cors = require('cors')
-const connectDB = require('./db/connect');
 const server = express();
 
-// middlewares
-server.use(express.static('./public'));
-//lets express know that incoming requests are in json form
+const connectDB = require('./db/connect');
+const userRoute = require('./routes/user');
+const errorHandler = require('./middleware/error-handler');
+const User = require('./models/User.model')
+
+// MIDDLEWARES 
+// server.use(express.static('./public'));
+//lets express know that incoming requests are in json form. without this jsons will be undefined
 server.use(express.json());
 //for security measures
 server.use(cors());
-
+//if '/user' comes after the base URL, the userRoute will handle the request
+server.use('/user', userRoute);
+//error handler middleware
+server.use(errorHandler);
+//environment variables
 require('dotenv').config();
+
 
 
 const port = process.env.PORT || 5000;
