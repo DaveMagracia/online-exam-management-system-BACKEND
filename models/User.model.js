@@ -20,8 +20,8 @@ const User = new mongoose.Schema({
         type: String,
         required: true,
     },
-
 }, 
+
 //name of the collection to save to 
 { collection: 'user-data' })
 

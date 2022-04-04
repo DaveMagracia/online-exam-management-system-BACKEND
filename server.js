@@ -22,7 +22,6 @@ server.use(errorHandler);
 require('dotenv').config();
 
 
-
 const port = process.env.PORT || 5000;
 
 // ASYNC FUNCTION TO WAIT DB CONNECTION BEFORE STARTING THE SERVER

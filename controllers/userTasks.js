@@ -62,16 +62,46 @@ const loginUser = asyncWrapper(async (req, res, next) => {
     }
     
     //if user exists, then create a token
-    const token = jwt.sign({
+    //The jwt token's purpose is to send back a base64 encoded response containing the info of the user 
+
+    //example of sent token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6Im1hcmtkYXZoZWVkQGdtYWlsLmNvbSIsInVzZXJuYW1lIjoiTmV3VXNlcjEiLCJpYXQiOjE2NDg5ODM5MTB9.QyKMJDLmNBQJP9u09eb2A5yV9ihD5NzyUWbCyYxytZY"
+    //the string between the two periods are the encrypted info
+    //to test, perform an atob('string') on the chrome console
+    const userToken = jwt.sign({
         email: user.email,
         username: user.username,
-    }, 'secret123')
-    return res.json({status: 'ok', user: token})
-    
+    }, process.env.JWT_SECRET_KEY)
+
+    return res.json({status: 'ok', user: userToken})
 })
+
+
+
+const getUserInfo = async (req, res, next) => {
+    const token = req.header('token')
+
+    try {
+        //if the jwt secret key is public, the public can access the incoming tokens from the clients to the server
+        const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY)
+        const email = decoded.email
+        const user = await User.findOne({ email: email })
+
+        //send back user info
+        res.json({
+            email: user.email,
+            username: user.username,
+            userType: user.userType
+        })
+    } catch (error) {
+        console.log(error)
+        res.json({ status: 'error', error: 'invalid token' })
+    }
+}
+
 
 //export the functions to be used in routes/user.js
 module.exports = {
     registerUser, 
     loginUser,
+    getUserInfo,
 }
