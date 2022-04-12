@@ -9,7 +9,15 @@ const QuestionBank = new mongoose.Schema(
          required: true,
          immutable: true, //once the value is set, it cannot be changed
       },
+      title: {
+         type: String,
+         required: false,
+      },
       questions: [Question],
+      totalQuestions: {
+         type: Number,
+         required: false,
+      },
       isFromExam: {
          type: Boolean,
          required: true,

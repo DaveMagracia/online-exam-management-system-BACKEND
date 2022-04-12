@@ -4,6 +4,7 @@ const User = require("../models/User.model");
 const asyncWrapper = require("../middleware/async");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
+const mongoose = require("mongoose");
 
 const registerUser = async (req, res, next) => {
    //get the request body then extract its contents to create a User in the database
@@ -80,13 +81,14 @@ const loginUser = asyncWrapper(async (req, res, next) => {
 });
 
 const getUserInfo = async (req, res, next) => {
-   const token = req.header("token");
+   const token = req.header("Authorization");
 
    try {
       //if the jwt secret key is public, the public can access the incoming tokens from the clients to the server
-      const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
-      const email = decoded.email;
-      const user = await User.findOne({ email: email });
+      const decodedUserToken = jwt.verify(token, process.env.JWT_SECRET_KEY);
+      const user = await User.findOne({
+         _id: mongoose.Types.ObjectId(decodedUserToken.id),
+      });
 
       //send back user info
       res.json({
@@ -96,7 +98,7 @@ const getUserInfo = async (req, res, next) => {
       });
    } catch (error) {
       console.log(error);
-      res.json({ status: "error", error: "invalid token" });
+      res.status(400).json({ status: "error", error: error });
    }
 };
 

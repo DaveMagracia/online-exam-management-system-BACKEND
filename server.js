@@ -6,6 +6,7 @@ const server = express();
 const connectDB = require("./db/connect");
 const userRoute = require("./routes/user");
 const examRoute = require("./routes/exam");
+const questionBankRoute = require("./routes/bank");
 const errorHandler = require("./middleware/error-handler");
 const User = require("./models/User.model");
 
@@ -17,7 +18,8 @@ server.use(express.json());
 server.use(cors());
 //if '/user' comes after the base URL, the userRoute will handle the request
 server.use("/user", userRoute);
-server.use("/exam", examRoute);
+server.use("/exams", examRoute);
+server.use("/question-banks", questionBankRoute);
 //error handler middleware
 server.use(errorHandler);
 //environment variables
