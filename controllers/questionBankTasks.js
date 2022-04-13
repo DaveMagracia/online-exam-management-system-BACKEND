@@ -1,67 +1,53 @@
 const express = require("express");
+//models
 const User = require("../models/User.model");
 const QuestionBank = require("../models/QuestionBank.model");
+//middlewares
 const asyncWrapper = require("../middleware/async");
+//libraries
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
+//errors
+const {
+   InternalServerError,
+   NotFoundError,
+   UnauthenticatedError,
+} = require("../errors");
 
-const createQuestionBank = asyncWrapper(async (req, res, next) => {
-   const userTokenDecoded = jwt.verify(
-      req.header("Authorization"),
-      process.env.JWT_SECRET_KEY
-   );
-
-   const user = await User.findById(
-      mongoose.Types.ObjectId(userTokenDecoded.id)
-   );
-
-   if (!user) {
-      let error = new Error("User not found.");
-      error.status = 404;
-      return next(error);
-   }
+const createQuestionBank = async (req, res) => {
+   var user = req.user;
 
    const createdBank = await QuestionBank.create({
       title: req.body.formData.title,
-      createdBy: mongoose.Types.ObjectId(user._id),
+      createdBy: mongoose.Types.ObjectId(user.id),
       questions: req.body.questions,
       totalQuestions: req.body.questions.length,
       isFromExam: false,
    });
 
    if (!createdBank) {
-      let error = new Error(
+      throw new InternalServerError(
          "Failed to create question bank. Please try again."
       );
-      error.status = 500;
-      return next(error);
    }
 
    return res.status(200).json({ msg: "success" });
-});
+};
 
 const getQuestionBanks = asyncWrapper(async (req, res, next) => {
-   const userTokenDecoded = jwt.verify(
-      req.header("Authorization"),
-      process.env.JWT_SECRET_KEY
-   );
-
-   const user = await User.findById(
-      mongoose.Types.ObjectId(userTokenDecoded.id)
-   );
-
-   if (!user) {
-      let error = new Error("User not found.");
-      error.status = 404;
-      return next(error);
-   }
+   var user = req.user;
 
    const questionBanks = await QuestionBank.find({
-      createdBy: mongoose.Types.ObjectId(userTokenDecoded.id),
+      createdBy: mongoose.Types.ObjectId(user.id),
       isFromExam: false, //if isFromExam === false, then it doesnt belong to an exam
    })
       .select("_id title totalQuestions") //specify fields that are included
       .sort("-createdAt"); //sort by date created in descending order
+
+   if (!questionBanks)
+      throw new NotFoundError(
+         "Something went wrong. Can't find created question banks."
+      );
 
    //questionBanks
    return res
@@ -70,36 +56,21 @@ const getQuestionBanks = asyncWrapper(async (req, res, next) => {
 });
 
 const deleteQuestionBank = asyncWrapper(async (req, res, next) => {
-   const userTokenDecoded = jwt.verify(
-      req.header("Authorization"),
-      process.env.JWT_SECRET_KEY
-   );
-   const user = await User.findById(
-      mongoose.Types.ObjectId(userTokenDecoded.id)
-   );
-
-   if (!user) {
-      let error = new Error("User not found.");
-      error.status = 404;
-      return next(error);
-   }
+   var user = req.user;
 
    const bank = await QuestionBank.findById(
       mongoose.Types.ObjectId(req.params.bankId)
    );
+
    if (!bank) {
-      let error = new Error("Question bank not found");
-      error.status = 404;
-      return next(error);
+      throw new NotFoundError("Question bank not found");
    }
 
    //check if the bank is created by the requester
-   if (String(user._id) !== String(bank.createdBy)) {
-      let error = new Error(
-         "You are unauthorized to access this resource, OR the source you are looking is not found."
+   if (String(user.id) !== String(bank.createdBy)) {
+      throw new UnauthenticatedError(
+         "You are unauthorized to access this resource."
       );
-      error.status = 403;
-      return next(error);
    }
 
    //delete the exam
@@ -108,72 +79,39 @@ const deleteQuestionBank = asyncWrapper(async (req, res, next) => {
    );
 
    if (!deletedBank) {
-      let error = new Error("Failed to delete question bank.");
-      error.status = 500;
-      return next(error);
+      throw new InternalServerError("Failed to delete question bank.");
    }
 
    res.status(200).json({ msg: "delete success" });
 });
 
 const getQuestionBankDetails = asyncWrapper(async (req, res, next) => {
-   const userTokenDecoded = jwt.verify(
-      req.header("Authorization"),
-      process.env.JWT_SECRET_KEY
-   );
-
-   const user = await User.findById(
-      mongoose.Types.ObjectId(userTokenDecoded.id)
-   );
-
-   if (!user) {
-      let error = new Error("User not found.");
-      error.status = 404;
-      return next(error);
-   }
-
    const questionBank = await QuestionBank.findById(
       mongoose.Types.ObjectId(req.params.bankId)
    );
+
    if (!questionBank) {
-      let error = new Error("Question bank not found.");
-      error.status = 404;
-      return next(error);
+      throw new NotFoundError("Question bank not found.");
    }
 
    res.json({ msg: "success", questionBank: questionBank });
 });
 
 const updateQuestionBank = asyncWrapper(async (req, res, next) => {
-   const userTokenDecoded = jwt.verify(
-      req.header("Authorization"),
-      process.env.JWT_SECRET_KEY
-   );
-
-   const user = await User.findById(
-      mongoose.Types.ObjectId(userTokenDecoded.id)
-   );
-   if (!user) {
-      let error = new Error("User not found.");
-      error.status = 404;
-      return next(error);
-   }
+   var user = req.user;
 
    const questionBank = await QuestionBank.findById(
       mongoose.Types.ObjectId(req.params.bankId)
    );
+
    if (!questionBank) {
-      let error = new Error("Question bank not found");
-      error.status = 404;
-      return next(error);
+      throw new NotFoundError("Question bank not found");
    }
 
-   if (String(user._id) !== String(questionBank.createdBy)) {
-      let error = new Error(
-         "You are unauthorized to access this resource, OR the source you are looking is not found"
+   if (String(user.id) !== String(questionBank.createdBy)) {
+      throw new UnauthenticatedError(
+         "You are unauthorized to access this resource."
       );
-      error.status = 403;
-      return next(error);
    }
 
    const updatedQuestionBank = await QuestionBank.findByIdAndUpdate(
@@ -185,9 +123,7 @@ const updateQuestionBank = asyncWrapper(async (req, res, next) => {
    );
 
    if (!updatedQuestionBank) {
-      let error = new Error("Failed to update question bank.");
-      error.status = 500;
-      return next(error);
+      throw new InternalServerError("Failed to update question bank.");
    }
 
    res.status(200).json({ msg: "success" });

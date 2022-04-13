@@ -1,4 +1,8 @@
 //IMPORTS
+//environment variables
+require("dotenv").config();
+require("express-async-errors");
+
 const express = require("express");
 const cors = require("cors");
 const server = express();
@@ -7,8 +11,8 @@ const connectDB = require("./db/connect");
 const userRoute = require("./routes/user");
 const examRoute = require("./routes/exam");
 const questionBankRoute = require("./routes/bank");
-const errorHandler = require("./middleware/error-handler");
-const User = require("./models/User.model");
+const notFoundMiddleware = require("./middleware/not-found");
+const errorHandlerMiddleware = require("./middleware/error-handler");
 
 // MIDDLEWARES
 // server.use(express.static('./public'));
@@ -21,9 +25,8 @@ server.use("/user", userRoute);
 server.use("/exams", examRoute);
 server.use("/question-banks", questionBankRoute);
 //error handler middleware
-server.use(errorHandler);
-//environment variables
-require("dotenv").config();
+server.use(notFoundMiddleware);
+server.use(errorHandlerMiddleware);
 
 const port = process.env.PORT || 5000;
 

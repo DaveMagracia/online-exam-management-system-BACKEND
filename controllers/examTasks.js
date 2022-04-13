@@ -1,32 +1,23 @@
 const express = require("express");
 const asyncWrapper = require("../middleware/async");
+//models
 const User = require("../models/User.model");
 const Exam = require("../models/Exam.model");
 const QuestionBank = require("../models/QuestionBank.model");
-const Question = require("../models/Question.model");
-const { create } = require("../models/Question.model");
+//libraries
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const { default: ShortUniqueId } = require("short-unique-id"); //library for generating unique code
 const schedule = require("node-schedule");
+//errors
+const {
+   InternalServerError,
+   NotFoundError,
+   UnauthenticatedError,
+} = require("../errors");
 
 const createExam = asyncWrapper(async (req, res, next) => {
-   //Verify first if user is legitimate
-   //the token is the user who sent the request
-   const userTokenDecoded = jwt.verify(
-      req.header("Authorization"),
-      process.env.JWT_SECRET_KEY
-   );
-   const user = await User.findById(
-      mongoose.Types.ObjectId(userTokenDecoded.id)
-   );
-   if (!user) {
-      let error = new Error("User not found.");
-      error.status = 404;
-      return next(error);
-   }
-
-   //////////////////////////////////////////
+   var user = req.user;
 
    var totalPoints = 0;
    totalPoints = req.body.questions.reduce(
@@ -36,16 +27,13 @@ const createExam = asyncWrapper(async (req, res, next) => {
 
    //create question bank and save into DB
    const createdBank = await QuestionBank.create({
-      createdBy: mongoose.Types.ObjectId(userTokenDecoded.id),
+      createdBy: mongoose.Types.ObjectId(user.id),
       questions: req.body.questions,
       isFromExam: true,
    });
 
-   if (!createdBank) {
-      let error = new Error("Failed to create question bank.");
-      error.status = 500;
-      return next(error);
-   }
+   if (!createdBank)
+      throw new InternalServerError("Failed to create question bank.");
 
    if (req.body.isPublishing) {
       const uid = new ShortUniqueId({ length: 10 });
@@ -66,7 +54,7 @@ const createExam = asyncWrapper(async (req, res, next) => {
       //create exam and save into DB
       //NOTE: the exam is created and published at the same time
       const createdExam = await Exam.create({
-         createdBy: mongoose.Types.ObjectId(userTokenDecoded.id),
+         createdBy: mongoose.Types.ObjectId(user.id),
          title: req.body.exam.title,
          date_from: req.body.exam.date_from,
          date_to: req.body.exam.date_to,
@@ -83,9 +71,7 @@ const createExam = asyncWrapper(async (req, res, next) => {
          //also delete exam question bank if creating exam fails
          //if exam creation fails then its corresponding questionBank will be unnecessary in the database
          await QuestionBank.deleteOne({ _id: createdBank._id });
-         let error = new Error("Failed to create exam.");
-         error.status = 500;
-         return next(error);
+         throw new InternalServerError("Failed to create exam.");
       }
 
       //Schedule when the exam will be opened and closed
@@ -95,9 +81,9 @@ const createExam = asyncWrapper(async (req, res, next) => {
             status: "opened",
          });
          if (!openedExam) {
-            let error = new Error("Failed to open exam");
-            error.status = 400;
-            return next(error);
+            throw new InternalServerError(
+               "Failed to set exam to an open state."
+            );
          }
       });
 
@@ -106,11 +92,10 @@ const createExam = asyncWrapper(async (req, res, next) => {
          const closedExam = await Exam.findByIdAndUpdate(createdExam._id, {
             status: "closed",
          });
-         if (!closedExam) {
-            let error = new Error("Failed to close exam");
-            error.status = 400;
-            return next(error);
-         }
+         if (!closedExam)
+            throw new InternalServerError(
+               "Failed to set exam to an closed state."
+            );
       });
 
       //return the exam code
@@ -139,9 +124,7 @@ const createExam = asyncWrapper(async (req, res, next) => {
          //also delete exam question bank if creating exam fails
          //if exam creation fails then its corresponding questionBank will be unnecessary in the database
          await QuestionBank.deleteOne({ _id: createdBank._id });
-         let error = new Error("Failed to create exam.");
-         error.status = 500;
-         return next(error);
+         throw new InternalServerError("Failed to create exam.");
       }
 
       return res.status(200).json({ status: "ok" });
@@ -149,38 +132,15 @@ const createExam = asyncWrapper(async (req, res, next) => {
 });
 
 const updateExam = asyncWrapper(async (req, res, next) => {
-   //Verify first if user is legitimate or if the exam is created by the requester
-   //the token is the user who sent the request
-   const userTokenDecoded = jwt.verify(
-      req.header("Authorization"),
-      process.env.JWT_SECRET_KEY
-   );
-
-   const user = await User.findById(
-      mongoose.Types.ObjectId(userTokenDecoded.id)
-   );
-   if (!user) {
-      let error = new Error("User not found.");
-      error.status = 404;
-      return next(error);
-   }
+   var user = req.user;
 
    const exam = await Exam.findById(mongoose.Types.ObjectId(req.params.examId));
-   if (!exam) {
-      let error = new Error("Exam not found");
-      error.status = 404;
-      return next(error);
-   }
+   if (!exam) throw new NotFoundError("Exam not found.");
 
-   if (String(user._id) !== String(exam.createdBy)) {
-      let error = new Error(
-         "You are unauthorized to access this resource, OR the source you are looking is not found"
+   if (String(user.id) !== String(exam.createdBy))
+      throw new UnauthenticatedError(
+         "You are unauthorized to access this resource."
       );
-      error.status = 403;
-      return next(error);
-   }
-
-   ////////////////////////////////
 
    var totalPoints = 0;
    totalPoints = req.body.questions.reduce(
@@ -221,22 +181,15 @@ const updateExam = asyncWrapper(async (req, res, next) => {
          }
       );
 
-      if (!updatedExam) {
-         let error = new Error("Failed to update exam.");
-         error.status = 500;
-         return next(error);
-      }
+      if (!updatedExam) throw new InternalServerError("Failed to update exam.");
 
       const updatedQuestionBank = await QuestionBank.findByIdAndUpdate(
          mongoose.Types.ObjectId(updatedExam.questionBankId),
          { questions: req.body.questions }
       );
 
-      if (!updatedQuestionBank) {
-         let error = new Error("Failed to update question bank.");
-         error.status = 500;
-         return next(error);
-      }
+      if (!updatedQuestionBank)
+         throw new InternalServerError("Failed to update question bank.");
 
       res.status(200).json({ msg: "success", examCode: generatedExamCode });
    } else {
@@ -255,11 +208,7 @@ const updateExam = asyncWrapper(async (req, res, next) => {
          }
       );
 
-      if (!updatedExam) {
-         let error = new Error("Exam update failed");
-         error.status = 500;
-         return next(error);
-      }
+      if (!updatedExam) throw new InternalServerError("Failed to update exam.");
 
       //update the question bank
       const updatedQuestionBank = await QuestionBank.findByIdAndUpdate(
@@ -267,11 +216,8 @@ const updateExam = asyncWrapper(async (req, res, next) => {
          { questions: req.body.questions }
       );
 
-      if (!updatedQuestionBank) {
-         let error = new Error("Question bank update failed");
-         error.status = 500;
-         return next(error);
-      }
+      if (!updatedQuestionBank)
+         throw new InternalServerError("Failed to update question bank.");
 
       return res.status(200).json({ msg: "success" });
    }
@@ -279,79 +225,42 @@ const updateExam = asyncWrapper(async (req, res, next) => {
 
 //GET ALL EXAMS FROM A SPECIFIC USER
 const getExams = asyncWrapper(async (req, res, next) => {
-   const userTokenDecoded = jwt.verify(
-      req.header("Authorization"),
-      process.env.JWT_SECRET_KEY
-   );
-
-   const user = await User.findById(
-      mongoose.Types.ObjectId(userTokenDecoded.id)
-   );
-
-   if (!user) {
-      let error = new Error("User not found.");
-      error.status = 404;
-      return next(error);
-   }
+   var user = req.user;
 
    const exams = await Exam.find({
-      createdBy: mongoose.Types.ObjectId(userTokenDecoded.id),
+      createdBy: mongoose.Types.ObjectId(user.id),
    })
       .select(
          "_id title date_from date_to totalItems totalPoints status createdAt examCode"
       ) //specify fields that are included
       .sort("-createdAt"); //sort by date created in descending order
 
-   if (!exams) {
-      let error = new Error("Something went wrong. Can't find created exams.");
-      error.status = 404;
-      return next(error);
-   }
+   if (!exams)
+      throw new NotFoundError(
+         "Something went wrong. Can't find created exams."
+      );
 
    return res.status(200).json({ exams });
 });
 
 const getExamDetails = asyncWrapper(async (req, res, next) => {
-   const userTokenDecoded = jwt.verify(
-      req.header("Authorization"),
-      process.env.JWT_SECRET_KEY
-   );
-
-   const user = await User.findById(
-      mongoose.Types.ObjectId(userTokenDecoded.id)
-   );
-
-   if (!user) {
-      let error = new Error("User not found.");
-      error.status = 404;
-      return next(error);
-   }
+   var user = req.user;
 
    const exam = await Exam.findById(mongoose.Types.ObjectId(req.params.examId));
-   if (!exam) {
-      let error = new Error("Exam not found");
-      error.status = 404;
-      return next(error);
-   }
+   if (!exam) throw new NotFoundError("Exam not found.");
+
    /*For security, check if the exam is created by the requester
      if the exam is not created by the requester, then respond with error 403 (forbidden)
 
      cast the IDs to string first because the IDs are objects
      omparing two objects with === will return false because they are 2 different objects with the same value*/
-   if (String(user._id) !== String(exam.createdBy)) {
-      let error = new Error(
-         "You are unauthorized to access this resource, OR the source you are looking is not found"
+   if (String(user.id) !== String(exam.createdBy))
+      throw new UnauthenticatedError(
+         "You are unauthorized to access this resource."
       );
-      error.status = 403;
-      return next(error);
-   }
 
    const questionBank = await QuestionBank.findById(exam.questionBankId);
-   if (!questionBank) {
-      let error = new Error("Question bank not found");
-      error.status = 404;
-      return next(error);
-   }
+   if (!questionBank) throw new NotFoundError("Question bank not found.");
 
    res.status(200).json({
       exam: exam,
@@ -360,57 +269,31 @@ const getExamDetails = asyncWrapper(async (req, res, next) => {
 });
 
 const deleteExam = asyncWrapper(async (req, res, next) => {
-   const userTokenDecoded = jwt.verify(
-      req.header("Authorization"),
-      process.env.JWT_SECRET_KEY
-   );
-   const user = await User.findById(
-      mongoose.Types.ObjectId(userTokenDecoded.id)
-   );
-
-   if (!user) {
-      let error = new Error("User not found.");
-      error.status = 404;
-      return next(error);
-   }
+   var user = req.user;
 
    const exam = await Exam.findById(mongoose.Types.ObjectId(req.params.examId));
-   if (!exam) {
-      let error = new Error("Exam not found");
-      error.status = 404;
-      return next(error);
-   }
+   if (!exam) throw new NotFoundError("Exam not found.");
 
    //check if the exam is created by the requester
-   if (String(user._id) !== String(exam.createdBy)) {
-      let error = new Error(
-         "You are unauthorized to access this resource, OR the source you are looking is not found."
+   if (String(user.id) !== String(exam.createdBy))
+      throw new UnauthenticatedError(
+         "You are unauthorized to access this resource."
       );
-      error.status = 403;
-      return next(error);
-   }
 
    //delete the exam
    const deletedExam = await Exam.findByIdAndDelete(
       mongoose.Types.ObjectId(req.params.examId)
    );
 
-   if (!deletedExam) {
-      let error = new Error("Failed to delete exam");
-      error.status = 500;
-      return next(error);
-   }
+   if (!deletedExam) throw new InternalServerError("Failed to delete exam.");
 
    //delete the exam's corresponding question bank
    const deletedQuestionBank = await QuestionBank.findByIdAndDelete(
       mongoose.Types.ObjectId(deletedExam.questionBankId)
    );
 
-   if (!deletedExam) {
-      let error = new Error("Failed to delete question bank");
-      error.status = 404;
-      return next(error);
-   }
+   if (!deletedQuestionBank)
+      throw new InternalServerError("Failed to delete exam question bank.");
 
    res.status(200).json({ msg: "delete success" });
 });

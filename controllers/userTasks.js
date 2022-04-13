@@ -1,10 +1,14 @@
 //THIS FILE CONTAINS ALL THE HANDLERS/FUNCTIONS FOR "/user" ROUTES
 const express = require("express");
+//models
 const User = require("../models/User.model");
+//middlewares
 const asyncWrapper = require("../middleware/async");
+//libraries
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const mongoose = require("mongoose");
+const { NotFoundError, UnauthenticatedError } = require("../errors");
 
 const registerUser = async (req, res, next) => {
    //get the request body then extract its contents to create a User in the database
@@ -47,20 +51,12 @@ const loginUser = asyncWrapper(async (req, res, next) => {
       [isEmail ? "email" : "username"]: email_username,
    });
 
-   if (!user) {
-      const error = new Error("Invalid credentials.");
-      error.status = 404;
-      return next(error);
-   }
+   if (!user) throw new NotFoundError("No such user exists.");
 
    //bcrpyt will compare the actual password input, with the encrypted password in the database
    const isMatch = await bcrypt.compare(req.body.pass, user.password);
    //if user is not found
-   if (!isMatch) {
-      const error = new Error("Invalid credentials.");
-      error.status = 404;
-      return next(error);
-   }
+   if (!isMatch) throw new UnauthenticatedError("Invalid credentials.");
 
    //if user exists, then create a token
    //The jwt token's purpose is to send back a base64 encoded response containing the info of the user
@@ -70,9 +66,10 @@ const loginUser = asyncWrapper(async (req, res, next) => {
    //to test, perform an atob('string') on the chrome console
    const userToken = jwt.sign(
       {
+         id: user._id,
          email: user.email,
          username: user.username,
-         id: user._id,
+         userType: user.userType,
       },
       process.env.JWT_SECRET_KEY
    );
@@ -81,25 +78,20 @@ const loginUser = asyncWrapper(async (req, res, next) => {
 });
 
 const getUserInfo = async (req, res, next) => {
-   const token = req.header("Authorization");
+   var userObj = req.user;
+   const user = await User.findOne({
+      _id: mongoose.Types.ObjectId(userObj.id),
+   });
 
-   try {
-      //if the jwt secret key is public, the public can access the incoming tokens from the clients to the server
-      const decodedUserToken = jwt.verify(token, process.env.JWT_SECRET_KEY);
-      const user = await User.findOne({
-         _id: mongoose.Types.ObjectId(decodedUserToken.id),
-      });
+   if (!user) throw new NotFoundError("User not found.");
 
-      //send back user info
-      res.json({
-         email: user.email,
-         username: user.username,
-         userType: user.userType,
-      });
-   } catch (error) {
-      console.log(error);
-      res.status(400).json({ status: "error", error: error });
-   }
+   //send back user info
+   res.json({
+      id: user._id,
+      email: user.email,
+      username: user.username,
+      userType: user.userType,
+   });
 };
 
 //export the functions to be used in routes/user.js

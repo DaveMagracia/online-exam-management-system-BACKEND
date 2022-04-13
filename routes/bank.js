@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const authMiddleware = require("../middleware/auth"); //include this middleware on routes that require authenticated access
 const {
    createQuestionBank,
    getQuestionBanks,
@@ -8,11 +9,14 @@ const {
    updateQuestionBank,
 } = require("../controllers/questionBankTasks");
 
-router.route("/").post(createQuestionBank).get(getQuestionBanks);
+router
+   .route("/")
+   .post(authMiddleware, createQuestionBank)
+   .get(authMiddleware, getQuestionBanks);
 router
    .route("/:bankId")
-   .get(getQuestionBankDetails)
-   .delete(deleteQuestionBank)
-   .patch(updateQuestionBank);
+   .get(authMiddleware, getQuestionBankDetails)
+   .delete(authMiddleware, deleteQuestionBank)
+   .patch(authMiddleware, updateQuestionBank);
 
 module.exports = router;
