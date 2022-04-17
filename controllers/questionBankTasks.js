@@ -12,6 +12,7 @@ const {
    InternalServerError,
    NotFoundError,
    UnauthenticatedError,
+   BadRequestError,
 } = require("../errors");
 
 const createQuestionBank = async (req, res) => {
@@ -119,6 +120,7 @@ const updateQuestionBank = asyncWrapper(async (req, res, next) => {
       {
          title: req.body.formData.title,
          questions: req.body.questions,
+         totalQuestions: req.body.questions.length,
       }
    );
 
@@ -129,10 +131,46 @@ const updateQuestionBank = asyncWrapper(async (req, res, next) => {
    res.status(200).json({ msg: "success" });
 });
 
+const getBankNames = asyncWrapper(async (req, res, next) => {
+   var user = req.user;
+
+   //convert id strings into ObjectIDs
+   const ids = req.body.questionBankIds.map((val) =>
+      mongoose.Types.ObjectId(val)
+   );
+
+   if (ids.length <= 0 || !ids) {
+      throw new BadRequestError("No question bank ids provided");
+   }
+
+   const questionBankTitles = await QuestionBank.find({
+      _id: { $in: ids },
+   }).select("title");
+
+   if (!questionBankTitles) {
+      throw new NotFoundError("No question bank titles found");
+   }
+
+   res.status(200).json({ msg: "success", questionBankTitles });
+});
+
+const checkIfBankInUse = asyncWrapper(async (req, res, next) => {
+   //this will contain the instances where the question bank was used in exams
+   const bankInstances = await QuestionBank.find({
+      questionBanks: {
+         $elemMatch: { questionBank: req.params.bankId },
+      },
+   });
+
+   res.status(200).json({ msg: "success", isUsed: bankInstances.length > 0 });
+});
+
 module.exports = {
    createQuestionBank,
    getQuestionBanks,
    deleteQuestionBank,
    getQuestionBankDetails,
    updateQuestionBank,
+   getBankNames,
+   checkIfBankInUse,
 };

@@ -20,15 +20,36 @@ const createExam = asyncWrapper(async (req, res, next) => {
    var user = req.user;
 
    var totalPoints = 0;
-   totalPoints = req.body.questions.reduce(
-      (acc, curr) => acc + Number(curr.points),
-      0
-   );
+   totalPoints = req.body.questions.reduce((acc, curr) => {
+      //Add only points from exam questions, not from question banks.
+
+      //Every exam has random questions pulled from question banks,
+      //those questions may have different points. So it is imposibble to
+      //determine beforehand what the total points of the exam will be
+      return acc + (!curr.isQuestionBank ? Number(curr.points) : 0);
+   }, 0);
+
+   var totalQuestionBankItems = 0;
+
+   //filter questionBanks from questions
+   const questionBanks = req.body.questions
+      .filter((val) => val.isQuestionBank)
+      .map((val) => {
+         totalQuestionBankItems += val.numOfItems;
+         return {
+            //change questionBank object format
+            noOfQuestions: val.numOfItems,
+            questionBank: mongoose.Types.ObjectId(val.questionBankId),
+         };
+      });
+
+   const questions = req.body.questions.filter((val) => !val.isQuestionBank);
 
    //create question bank and save into DB
    const createdBank = await QuestionBank.create({
       createdBy: mongoose.Types.ObjectId(user.id),
-      questions: req.body.questions,
+      questions: questions,
+      questionBanks: questionBanks,
       isFromExam: true,
    });
 
@@ -50,17 +71,17 @@ const createExam = asyncWrapper(async (req, res, next) => {
          if (exam) continue;
          else break;
       }
-
       //create exam and save into DB
       //NOTE: the exam is created and published at the same time
       const createdExam = await Exam.create({
          createdBy: mongoose.Types.ObjectId(user.id),
          title: req.body.exam.title,
+         subject: req.body.exam.subject,
          date_from: req.body.exam.date_from,
          date_to: req.body.exam.date_to,
          time_limit: req.body.exam.time_limit,
          directions: req.body.exam.directions,
-         totalItems: req.body.questions.length,
+         totalItems: questions.length + totalQuestionBankItems,
          questionBankId: createdBank._id,
          totalPoints: totalPoints,
          examCode: generatedExamCode,
@@ -103,17 +124,21 @@ const createExam = asyncWrapper(async (req, res, next) => {
          .status(200)
          .json({ status: "ok", examCode: generatedExamCode });
    } else {
+      console.log("before");
+      console.log(req.body.exam);
+
       //create exam and save into DB
       //NOTE: the exam saved is unpublished.
       //No exam code is provided because the exam is not yet published
       const createdExam = await Exam.create({
          createdBy: mongoose.Types.ObjectId(user.id),
          title: req.body.exam.title,
+         subject: req.body.exam.subject,
          date_from: req.body.exam.date_from,
          date_to: req.body.exam.date_to,
          time_limit: req.body.exam.time_limit,
          directions: req.body.exam.directions,
-         totalItems: req.body.questions.length,
+         totalItems: questions.length + totalQuestionBankItems,
          totalPoints: totalPoints,
          questionBankId: createdBank._id,
          status: "unposted", //unposted by default
@@ -123,7 +148,9 @@ const createExam = asyncWrapper(async (req, res, next) => {
       if (!createdExam) {
          //also delete exam question bank if creating exam fails
          //if exam creation fails then its corresponding questionBank will be unnecessary in the database
-         await QuestionBank.deleteOne({ _id: createdBank._id });
+         await QuestionBank.findByIdAndDelete(
+            mongoose.Types.ObjectId(createdBank._id)
+         );
          throw new InternalServerError("Failed to create exam.");
       }
 
@@ -143,10 +170,30 @@ const updateExam = asyncWrapper(async (req, res, next) => {
       );
 
    var totalPoints = 0;
-   totalPoints = req.body.questions.reduce(
-      (acc, curr) => acc + Number(curr.points),
-      0
-   );
+   totalPoints = req.body.questions.reduce((acc, curr) => {
+      //Add only points from exam questions, not from question banks.
+
+      //Every exam has random questions pulled from question banks,
+      //those questions may have different points. So it is imposibble to
+      //determine beforehand what the total points of the exam will be
+      return acc + (!curr.isQuestionBank ? Number(curr.points) : 0);
+   }, 0);
+
+   var totalQuestionBankItems = 0;
+
+   //filter questionBanks from questions
+   const questionBanks = req.body.questions
+      .filter((val) => val.isQuestionBank)
+      .map((val) => {
+         totalQuestionBankItems += val.numOfItems;
+         return {
+            //change questionBank object format
+            noOfQuestions: val.numOfItems,
+            questionBank: mongoose.Types.ObjectId(val.questionBankId),
+         };
+      });
+
+   const questions = req.body.questions.filter((val) => !val.isQuestionBank);
 
    //if isPublishing, then updated the exam to a posted state
    if (req.body.isPublishing) {
@@ -170,11 +217,12 @@ const updateExam = asyncWrapper(async (req, res, next) => {
          mongoose.Types.ObjectId(req.params.examId),
          {
             title: req.body.examData.title,
+            subject: req.body.examData.subject,
             date_from: req.body.examData.date_from,
             date_to: req.body.examData.date_to,
             time_limit: req.body.examData.time_limit,
             directions: req.body.examData.directions,
-            totalItems: req.body.questions.length,
+            totalItems: questions.length + totalQuestionBankItems,
             totalPoints: totalPoints,
             examCode: generatedExamCode,
             status: "posted",
@@ -185,7 +233,7 @@ const updateExam = asyncWrapper(async (req, res, next) => {
 
       const updatedQuestionBank = await QuestionBank.findByIdAndUpdate(
          mongoose.Types.ObjectId(updatedExam.questionBankId),
-         { questions: req.body.questions }
+         { questions: questions, questionBanks: questionBanks }
       );
 
       if (!updatedQuestionBank)
@@ -198,11 +246,12 @@ const updateExam = asyncWrapper(async (req, res, next) => {
          mongoose.Types.ObjectId(req.params.examId),
          {
             title: req.body.examData.title,
+            subject: req.body.examData.subject,
             date_from: req.body.examData.date_from,
             date_to: req.body.examData.date_to,
             time_limit: req.body.examData.time_limit,
             directions: req.body.examData.directions,
-            totalItems: req.body.questions.length,
+            totalItems: questions.length + totalQuestionBankItems,
             totalPoints: totalPoints,
             status: "unposted",
          }
@@ -213,7 +262,7 @@ const updateExam = asyncWrapper(async (req, res, next) => {
       //update the question bank
       const updatedQuestionBank = await QuestionBank.findByIdAndUpdate(
          mongoose.Types.ObjectId(updatedExam.questionBankId),
-         { questions: req.body.questions }
+         { questions: questions, questionBanks: questionBanks }
       );
 
       if (!updatedQuestionBank)
@@ -298,10 +347,119 @@ const deleteExam = asyncWrapper(async (req, res, next) => {
    res.status(200).json({ msg: "delete success" });
 });
 
+const getSubjects = asyncWrapper(async (req, res, next) => {
+   var user = req.user;
+
+   //get subjects from Exam collection because there are no collection for subjects
+   const subjects = await Exam.find({
+      createdBy: mongoose.Types.ObjectId(user.id),
+   })
+      .select("subject title date_from status") //specify fields that are included
+      .sort("-createdAt"); //sort by date created in descending order
+
+   if (!subjects)
+      throw new NotFoundError(
+         "Something went wrong. Can't find created exams."
+      );
+
+   function getIsUpcoming(curr, currentTime) {
+      //this obj returned will be pushed to upcomingExams array
+
+      //the exam needs to be :
+      //date_from must be 3 days from now
+      //status must be unposted
+      if (curr.date_from.getTime() - currentTime <= 259200000) {
+         if (curr.status === "posted") {
+            const obj = {
+               id: curr._id,
+               title: curr.title,
+               date_from: curr.date_from,
+            };
+            return obj;
+         }
+         return;
+      }
+      return;
+   }
+
+   const currentTime = new Date().getTime();
+   const occurrences = subjects.reduce((acc, curr) => {
+      //find the index on the accumulator to check if the subject already exists
+      const index = acc.findIndex((el) => el.subject === curr.subject);
+      const upcomingExam = getIsUpcoming(curr, currentTime);
+
+      return (
+         index + 1 //check if the subject already exists in the array; +1 so that if ever index is 0, it is not false; -1 if not found
+            ? (acc[index] = {
+                 ...acc[index],
+                 examCount: acc[index].examCount + 1,
+                 upcomingExams: [
+                    ...acc[index].upcomingExams,
+                    upcomingExam,
+                 ].filter(Boolean), //remove undefined values
+              }) //if the subj already exists, just increment the examCount property
+            : acc.push({
+                 subject: curr.subject,
+                 examCount: 1,
+                 upcomingExams: [upcomingExam].filter(Boolean), //remove undefined values
+              }), //else push a new obj
+         acc
+      );
+   }, []);
+
+   return res.status(200).json({ subjects: occurrences });
+});
+
+const getExamsFromSubject = asyncWrapper(async (req, res, next) => {
+   var user = req.user;
+
+   const exams = await Exam.find({
+      createdBy: mongoose.Types.ObjectId(user.id),
+      subject: req.params.subjectName,
+   })
+      .select(
+         "_id title date_from date_to totalItems totalPoints status createdAt examCode"
+      ) //specify fields that are included
+      .sort("-createdAt"); //sort by date created in descending order
+
+   if (!exams)
+      throw new NotFoundError(
+         "Something went wrong. Can't find created exams."
+      );
+
+   res.status(200).json({ msg: "success", exams: exams });
+});
+
+const getSubjectNames = asyncWrapper(async (req, res, next) => {
+   var user = req.user;
+
+   //get subjects from Exam collection because there are no collection for subjects
+   const subjects = await Exam.find({
+      createdBy: mongoose.Types.ObjectId(user.id),
+   })
+      .select("subject title date_from status") //specify fields that are included
+      .sort("-createdAt"); //sort by date created in descending order
+
+   if (!subjects)
+      throw new NotFoundError(
+         "Something went wrong. Can't find created exams."
+      );
+
+   //from all the exams, reduce to an array that contains only the subjects (no duplicates)
+   const subjectNames = subjects.reduce((acc, curr) => {
+      if (!acc.includes(curr.subject)) acc.push(curr.subject);
+      return acc;
+   }, []);
+
+   res.status(200).json({ subjectNames });
+});
 module.exports = {
    createExam,
    getExams,
    getExamDetails,
    updateExam,
    deleteExam,
+   getSubjects,
+   getSubjectNames,
+   getExamsFromSubject,
 };

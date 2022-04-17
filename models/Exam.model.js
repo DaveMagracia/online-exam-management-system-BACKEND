@@ -12,6 +12,10 @@ const Exam = new mongoose.Schema(
          type: String,
          required: true,
       },
+      subject: {
+         type: String,
+         required: true,
+      },
       date_from: {
          type: Date,
       },

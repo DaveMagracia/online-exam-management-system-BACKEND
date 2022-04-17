@@ -7,6 +7,8 @@ const {
    deleteQuestionBank,
    getQuestionBankDetails,
    updateQuestionBank,
+   getBankNames,
+   checkIfBankInUse,
 } = require("../controllers/questionBankTasks");
 
 router
@@ -18,5 +20,7 @@ router
    .get(authMiddleware, getQuestionBankDetails)
    .delete(authMiddleware, deleteQuestionBank)
    .patch(authMiddleware, updateQuestionBank);
+router.route("/getTitles").post(authMiddleware, getBankNames);
+router.route("/check/:bankId").get(checkIfBankInUse);
 
 module.exports = router;
