@@ -4,6 +4,7 @@ const asyncWrapper = require("../middleware/async");
 const User = require("../models/User.model");
 const Exam = require("../models/Exam.model");
 const QuestionBank = require("../models/QuestionBank.model");
+const ExamRegisters = require("../models/ExamRegisters.model");
 //libraries
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
@@ -97,9 +98,9 @@ const createExam = asyncWrapper(async (req, res, next) => {
 
       //Schedule when the exam will be opened and closed
       schedule.scheduleJob(req.body.exam.date_from, async () => {
-         //update the existing exam to a "opened" state
+         //update the existing exam to an "open" state
          const openedExam = await Exam.findByIdAndUpdate(createdExam._id, {
-            status: "opened",
+            status: "open",
          });
          if (!openedExam) {
             throw new InternalServerError(
@@ -124,9 +125,6 @@ const createExam = asyncWrapper(async (req, res, next) => {
          .status(200)
          .json({ status: "ok", examCode: generatedExamCode });
    } else {
-      console.log("before");
-      console.log(req.body.exam);
-
       //create exam and save into DB
       //NOTE: the exam saved is unpublished.
       //No exam code is provided because the exam is not yet published
@@ -295,26 +293,80 @@ const getExams = asyncWrapper(async (req, res, next) => {
 const getExamDetails = asyncWrapper(async (req, res, next) => {
    var user = req.user;
 
-   const exam = await Exam.findById(mongoose.Types.ObjectId(req.params.examId));
-   if (!exam) throw new NotFoundError("Exam not found.");
-
-   /*For security, check if the exam is created by the requester
-     if the exam is not created by the requester, then respond with error 403 (forbidden)
-
-     cast the IDs to string first because the IDs are objects
-     omparing two objects with === will return false because they are 2 different objects with the same value*/
-   if (String(user.id) !== String(exam.createdBy))
-      throw new UnauthenticatedError(
-         "You are unauthorized to access this resource."
+   if (user.userType === "student") {
+      const exam = await Exam.findById(
+         mongoose.Types.ObjectId(req.params.examId)
       );
 
-   const questionBank = await QuestionBank.findById(exam.questionBankId);
-   if (!questionBank) throw new NotFoundError("Question bank not found.");
+      if (!exam) throw new NotFoundError("Exam not found.");
 
-   res.status(200).json({
-      exam: exam,
-      questionBank: questionBank,
-   });
+      //check if student is a registered student for this exam
+      //if there is a result returened, then the student is permitted to access the exam details
+      const isRegistered = await ExamRegisters.findOne({
+         user: mongoose.Types.ObjectId(user.id),
+         examCode: exam.examCode,
+      });
+
+      if (!isRegistered) {
+         throw new UnauthenticatedError(
+            "You are unauthorized to access this resource."
+         );
+      }
+
+      //get list of students
+      const registeredStudents = await ExamRegisters.find({
+         examCode: exam.examCode,
+      });
+
+      const studentIds = registeredStudents.map((val) => val.user);
+
+      const users = await User.find({
+         _id: { $in: studentIds },
+      }).select("-password -userType -updatedAt");
+
+      if (!users) throw new NotFoundError("Users not found.");
+
+      const faculty = await User.findById(exam.createdBy).select("username");
+
+      return res
+         .status(200)
+         .json({ exam: exam, students: users, faculty: faculty });
+   } else {
+      const exam = await Exam.findById(
+         mongoose.Types.ObjectId(req.params.examId)
+      );
+      if (!exam) throw new NotFoundError("Exam not found.");
+      /*For security, check if the exam is created by the requester
+        if the exam is not created by the requester, then respond with error 403 (forbidden)
+   
+        cast the IDs to string first because the IDs are objects
+        omparing two objects with === will return false because they are 2 different objects with the same value*/
+      if (String(user.id) !== String(exam.createdBy))
+         throw new UnauthenticatedError(
+            "You are unauthorized to access this resource."
+         );
+      const questionBank = await QuestionBank.findById(exam.questionBankId);
+      if (!questionBank) throw new NotFoundError("Question bank not found.");
+
+      //get list of students
+      const registeredStudents = await ExamRegisters.find({
+         examCode: exam.examCode,
+      });
+
+      const studentIds = registeredStudents.map((val) => val.user);
+
+      const users = await User.find({
+         _id: { $in: studentIds },
+      }).select("-password -userType -updatedAt");
+
+      if (!users) throw new NotFoundError("Users not found.");
+
+      return res.status(200).json({
+         exam: exam,
+         questionBank: questionBank,
+         students: users,
+      });
+   }
 });
 
 const deleteExam = asyncWrapper(async (req, res, next) => {
@@ -350,20 +402,56 @@ const deleteExam = asyncWrapper(async (req, res, next) => {
 const getSubjects = asyncWrapper(async (req, res, next) => {
    var user = req.user;
 
-   //get subjects from Exam collection because there are no collection for subjects
-   const subjects = await Exam.find({
-      createdBy: mongoose.Types.ObjectId(user.id),
-   })
-      .select("subject title date_from status") //specify fields that are included
-      .sort("-createdAt"); //sort by date created in descending order
+   var subjects = null; //set initially to null
+   var facultyNames = null;
 
-   if (!subjects)
-      throw new NotFoundError(
-         "Something went wrong. Can't find created exams."
+   //get subjects through the registered exams
+   if (user.userType === "student") {
+      //get all registered exams from requester
+      const registeredExams = await ExamRegisters.find({
+         user: user.id,
+      }).select("examCode");
+
+      if (!registeredExams) throw new NotFoundError("No registered exams");
+
+      //extract the examCode from the returned object and put in array
+      const examCodesArr = registeredExams.map((val) => val.examCode);
+      //find exams through examCode
+      subjects = await Exam.find({
+         examCode: { $in: examCodesArr },
+      })
+         .select("subject title date_from status createdBy") //specify fields that are included
+         .sort("-createdAt"); //sort by date created in descending order
+
+      if (!subjects)
+         throw new NotFoundError("Something went wrong. Can't find exams.");
+
+      //from the exams found, extract the createdBy IDs and put into array to get their usernames
+      const facultyIdsArr = subjects.map((val) =>
+         mongoose.Types.ObjectId(val.createdBy)
       );
 
+      //get the usernames of the faculty
+      facultyNames = await User.find({
+         _id: { $in: facultyIdsArr },
+      }).select("username");
+   } else {
+      //get subjects from Exam collection because there are no collection for subjects
+      subjects = await Exam.find({
+         createdBy: mongoose.Types.ObjectId(user.id),
+      })
+         .select("subject title date_from status") //specify fields that are included
+         .sort("-createdAt"); //sort by date created in descending order
+
+      if (!subjects)
+         throw new NotFoundError(
+            "Something went wrong. Can't find created exams."
+         );
+   }
+
+   // inner function
    function getIsUpcoming(curr, currentTime) {
-      //this obj returned will be pushed to upcomingExams array
+      //the obj returned will be pushed to upcomingExams array
 
       //the exam needs to be :
       //date_from must be 3 days from now
@@ -382,8 +470,10 @@ const getSubjects = asyncWrapper(async (req, res, next) => {
       return;
    }
 
+   //the following codes will get the subject name based on the exams got and how many exams there are in each subject
+   //in addition, identify the upcoming exams
    const currentTime = new Date().getTime();
-   const occurrences = subjects.reduce((acc, curr) => {
+   const subjectOccurences = subjects.reduce((acc, curr) => {
       //find the index on the accumulator to check if the subject already exists
       const index = acc.findIndex((el) => el.subject === curr.subject);
       const upcomingExam = getIsUpcoming(curr, currentTime);
@@ -393,6 +483,7 @@ const getSubjects = asyncWrapper(async (req, res, next) => {
             ? (acc[index] = {
                  ...acc[index],
                  examCount: acc[index].examCount + 1,
+                 //   createdBy: facultyNames.find(el => el._id === curr.createdBy),
                  upcomingExams: [
                     ...acc[index].upcomingExams,
                     upcomingExam,
@@ -400,32 +491,51 @@ const getSubjects = asyncWrapper(async (req, res, next) => {
               }) //if the subj already exists, just increment the examCount property
             : acc.push({
                  subject: curr.subject,
+                 ...(user.userType === "student" && {
+                    createdBy: facultyNames.find(
+                       (el) => String(el._id) === String(curr.createdBy) //compare by string because IDs of mongoose are objects
+                    ).username,
+                 }), //add property only if requester is a student
                  examCount: 1,
                  upcomingExams: [upcomingExam].filter(Boolean), //remove undefined values
               }), //else push a new obj
          acc
       );
    }, []);
-
-   return res.status(200).json({ subjects: occurrences });
+   return res.status(200).json({ subjects: subjectOccurences });
 });
 
 const getExamsFromSubject = asyncWrapper(async (req, res, next) => {
    var user = req.user;
+   var exams = null;
 
-   const exams = await Exam.find({
-      createdBy: mongoose.Types.ObjectId(user.id),
-      subject: req.params.subjectName,
-   })
-      .select(
-         "_id title date_from date_to totalItems totalPoints status createdAt examCode"
-      ) //specify fields that are included
-      .sort("-createdAt"); //sort by date created in descending order
+   if (user.userType === "student") {
+      //get exams registered by student
+      const examRegisters = await ExamRegisters.find({
+         user: mongoose.Types.ObjectId(user.id),
+      });
+
+      if (!examRegisters) throw new NotFoundError("No registered exams");
+      //extract examCodes into array of strings
+      const examCodesArr = examRegisters.map((val) => val.examCode);
+
+      exams = await Exam.find({
+         examCode: { $in: examCodesArr },
+         subject: req.params.subjectName,
+      });
+   } else {
+      exams = await Exam.find({
+         createdBy: mongoose.Types.ObjectId(user.id),
+         subject: req.params.subjectName,
+      })
+         .select(
+            "_id title date_from date_to totalItems totalPoints status createdAt examCode"
+         ) //specify fields that are included
+         .sort("-createdAt"); //sort by date created in descending order
+   }
 
    if (!exams)
-      throw new NotFoundError(
-         "Something went wrong. Can't find created exams."
-      );
+      throw new NotFoundError("Something went wrong. Can't find exams.");
 
    res.status(200).json({ msg: "success", exams: exams });
 });
@@ -433,26 +543,42 @@ const getExamsFromSubject = asyncWrapper(async (req, res, next) => {
 const getSubjectNames = asyncWrapper(async (req, res, next) => {
    var user = req.user;
 
-   //get subjects from Exam collection because there are no collection for subjects
-   const subjects = await Exam.find({
-      createdBy: mongoose.Types.ObjectId(user.id),
-   })
-      .select("subject title date_from status") //specify fields that are included
-      .sort("-createdAt"); //sort by date created in descending order
+   var exams = null;
 
-   if (!subjects)
-      throw new NotFoundError(
-         "Something went wrong. Can't find created exams."
-      );
+   if (user.userType === "student") {
+      //get exams registered by student
+      const examRegisters = await ExamRegisters.find({
+         user: mongoose.Types.ObjectId(user.id),
+      });
 
-   //from all the exams, reduce to an array that contains only the subjects (no duplicates)
-   const subjectNames = subjects.reduce((acc, curr) => {
+      if (!examRegisters) throw new NotFoundError("No registered exams");
+      //extract examCodes into array of strings
+      const examCodesArr = examRegisters.map((val) => val.examCode);
+
+      exams = await Exam.find({
+         examCode: { $in: examCodesArr },
+      });
+   } else {
+      //get subjects from Exam collection because there are no collection for subjects
+      exams = await Exam.find({
+         createdBy: mongoose.Types.ObjectId(user.id),
+      })
+         .select("subject title date_from status") //specify fields that are included
+         .sort("-createdAt"); //sort by date created in descending order
+   }
+
+   if (!exams)
+      throw new NotFoundError("Something went wrong. Can't find exams.");
+
+   //from all the exams, reduce to an array that contains only strings of subjects (no duplicates)
+   const subjectNames = exams.reduce((acc, curr) => {
       if (!acc.includes(curr.subject)) acc.push(curr.subject);
       return acc;
    }, []);
 
    res.status(200).json({ subjectNames });
 });
+
 module.exports = {
    createExam,
    getExams,

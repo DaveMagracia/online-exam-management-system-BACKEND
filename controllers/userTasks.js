@@ -131,17 +131,22 @@ const registerCode = asyncWrapper(async (req, res, next) => {
 
 const updateProfile = asyncWrapper(async (req, res, next) => {
    const user = req.user;
+   var udpatedUser = null;
 
-   const updatedUser = await User.findByIdAndUpdate(
-      mongoose.Types.ObjectId(user.id),
-      {
-         username: req.body.username,
-         email: req.body.email,
-      },
-      { new: true } //option to return the updated document because the default returns the original/unaltered version before the update
-   );
+   try {
+      updatedUser = await User.findByIdAndUpdate(
+         mongoose.Types.ObjectId(user.id),
+         {
+            username: req.body.username,
+            email: req.body.email,
+         },
+         { new: true } //option to return the updated document because the default returns the original/unaltered version before the update
+      );
+   } catch (err) {
+      throw new ConflictError("Username already exists.");
+   }
 
-   if (!updatedUser) throw new InternalServerError("Failed to update profile");
+   // if (!updatedUser) throw new InternalServerError("Failed to update profile");
 
    const userToken = jwt.sign(
       {
