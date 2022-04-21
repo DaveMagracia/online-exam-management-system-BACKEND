@@ -10,13 +10,17 @@ const {
    getSubjects,
    getSubjectNames,
    getExamsFromSubject,
+   startExam,
+   submitExam,
 } = require("../controllers/examTasks");
 
 router
    .route("/")
    .get(authMiddleware, getExams)
-   .post(authMiddleware, createExam);
+   .post(authMiddleware, createExam)
+   .patch(authMiddleware, submitExam);
 router.route("/subjects").get(authMiddleware, getSubjects);
+router.route("/start/:examId").post(authMiddleware, startExam);
 router.route("/subjectNames").get(authMiddleware, getSubjectNames);
 router.route("/subjects/:subjectName").get(authMiddleware, getExamsFromSubject);
 router

@@ -27,9 +27,7 @@ const createQuestionBank = async (req, res) => {
    });
 
    if (!createdBank) {
-      throw new InternalServerError(
-         "Failed to create question bank. Please try again."
-      );
+      throw new InternalServerError("Failed to create question bank. Please try again.");
    }
 
    return res.status(200).json({ msg: "success" });
@@ -46,22 +44,16 @@ const getQuestionBanks = asyncWrapper(async (req, res, next) => {
       .sort("-createdAt"); //sort by date created in descending order
 
    if (!questionBanks)
-      throw new NotFoundError(
-         "Something went wrong. Can't find created question banks."
-      );
+      throw new NotFoundError("Something went wrong. Can't find created question banks.");
 
    //questionBanks
-   return res
-      .status(200)
-      .json({ msg: "success", questionBanks: questionBanks });
+   return res.status(200).json({ msg: "success", questionBanks: questionBanks });
 });
 
 const deleteQuestionBank = asyncWrapper(async (req, res, next) => {
    var user = req.user;
 
-   const bank = await QuestionBank.findById(
-      mongoose.Types.ObjectId(req.params.bankId)
-   );
+   const bank = await QuestionBank.findById(mongoose.Types.ObjectId(req.params.bankId));
 
    if (!bank) {
       throw new NotFoundError("Question bank not found");
@@ -69,9 +61,7 @@ const deleteQuestionBank = asyncWrapper(async (req, res, next) => {
 
    //check if the bank is created by the requester
    if (String(user.id) !== String(bank.createdBy)) {
-      throw new UnauthenticatedError(
-         "You are unauthorized to access this resource."
-      );
+      throw new UnauthenticatedError("You are unauthorized to access this resource.");
    }
 
    //delete the exam
@@ -87,9 +77,7 @@ const deleteQuestionBank = asyncWrapper(async (req, res, next) => {
 });
 
 const getQuestionBankDetails = asyncWrapper(async (req, res, next) => {
-   const questionBank = await QuestionBank.findById(
-      mongoose.Types.ObjectId(req.params.bankId)
-   );
+   const questionBank = await QuestionBank.findById(mongoose.Types.ObjectId(req.params.bankId));
 
    if (!questionBank) {
       throw new NotFoundError("Question bank not found.");
@@ -101,18 +89,14 @@ const getQuestionBankDetails = asyncWrapper(async (req, res, next) => {
 const updateQuestionBank = asyncWrapper(async (req, res, next) => {
    var user = req.user;
 
-   const questionBank = await QuestionBank.findById(
-      mongoose.Types.ObjectId(req.params.bankId)
-   );
+   const questionBank = await QuestionBank.findById(mongoose.Types.ObjectId(req.params.bankId));
 
    if (!questionBank) {
       throw new NotFoundError("Question bank not found");
    }
 
    if (String(user.id) !== String(questionBank.createdBy)) {
-      throw new UnauthenticatedError(
-         "You are unauthorized to access this resource."
-      );
+      throw new UnauthenticatedError("You are unauthorized to access this resource.");
    }
 
    const updatedQuestionBank = await QuestionBank.findByIdAndUpdate(
@@ -135,9 +119,7 @@ const getBankNames = asyncWrapper(async (req, res, next) => {
    var user = req.user;
 
    //convert id strings into ObjectIDs
-   const ids = req.body.questionBankIds.map((val) =>
-      mongoose.Types.ObjectId(val)
-   );
+   const ids = req.body.questionBankIds.map((val) => mongoose.Types.ObjectId(val));
 
    if (ids.length <= 0 || !ids) {
       throw new BadRequestError("No question bank ids provided");

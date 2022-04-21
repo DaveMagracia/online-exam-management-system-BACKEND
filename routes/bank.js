@@ -11,10 +11,7 @@ const {
    checkIfBankInUse,
 } = require("../controllers/questionBankTasks");
 
-router
-   .route("/")
-   .post(authMiddleware, createQuestionBank)
-   .get(authMiddleware, getQuestionBanks);
+router.route("/").post(authMiddleware, createQuestionBank).get(authMiddleware, getQuestionBanks);
 router
    .route("/:bankId")
    .get(authMiddleware, getQuestionBankDetails)

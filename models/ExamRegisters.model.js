@@ -8,10 +8,16 @@ const ExamRegisters = new mongoose.Schema(
          type: mongoose.Schema.Types.ObjectId,
          ref: "User",
       },
+      status: {
+         type: String,
+      },
       examCode: {
          type: String,
          required: true,
          unique: true,
+      },
+      details: {
+         type: mongoose.Schema.Types.Mixed,
       },
    },
    { collection: "examRegisters", timestamps: true }

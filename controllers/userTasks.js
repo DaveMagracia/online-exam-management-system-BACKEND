@@ -48,8 +48,7 @@ const registerUser = async (req, res, next) => {
 // It will prevent the repetitive use of the try/catch block which makes code longer
 const loginUser = asyncWrapper(async (req, res, next) => {
    //check if input is email or username
-   let emailRegex =
-      /^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$/;
+   let emailRegex = /^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$/;
    let email_username = req.body.email_username;
    let isEmail = emailRegex.test(email_username);
 
@@ -115,16 +114,14 @@ const registerCode = asyncWrapper(async (req, res, next) => {
    });
 
    //if the it exists, then the user is already registered to specified exam
-   if (isUserRegistered)
-      throw new ConflictError("You are already registered to this exam.");
+   if (isUserRegistered) throw new ConflictError("You are already registered to this exam.");
 
    const registeredExam = await ExamRegisters.create({
       user: mongoose.Types.ObjectId(user.id),
       examCode: req.body.examCode,
    });
 
-   if (!registeredExam)
-      throw new InternalServerError("Failed to register exam");
+   if (!registeredExam) throw new InternalServerError("Failed to register exam");
 
    return res.status(200).json({ msg: "success" });
 });
@@ -177,13 +174,11 @@ const changePassword = asyncWrapper(async (req, res, next) => {
    //hash the new password and set it as the new password
    const newHashedPassword = await bcrypt.hash(req.body.newpass, 8);
 
-   const updatedUser = await User.findByIdAndUpdate(
-      mongoose.Types.ObjectId(findUser._id),
-      { password: newHashedPassword }
-   );
+   const updatedUser = await User.findByIdAndUpdate(mongoose.Types.ObjectId(findUser._id), {
+      password: newHashedPassword,
+   });
 
-   if (!updatedUser)
-      throw new InternalServerError("Failed to update password.");
+   if (!updatedUser) throw new InternalServerError("Failed to update password.");
 
    res.status(200).json({ msg: "success" });
 });
