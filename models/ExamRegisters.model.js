@@ -10,11 +10,11 @@ const ExamRegisters = new mongoose.Schema(
       },
       status: {
          type: String,
+         default: "unanswered",
       },
       examCode: {
          type: String,
          required: true,
-         unique: true,
       },
       details: {
          type: mongoose.Schema.Types.Mixed,

@@ -12,6 +12,11 @@ const Exam = new mongoose.Schema(
          type: String,
          required: true,
       },
+      passingScore: {
+         type: Number,
+         required: true,
+         default: 0,
+      },
       subject: {
          type: String,
          required: true,

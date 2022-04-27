@@ -75,6 +75,7 @@ const createExam = asyncWrapper(async (req, res, next) => {
          createdBy: mongoose.Types.ObjectId(user.id),
          title: req.body.exam.title,
          subject: req.body.exam.subject,
+         passingScore: req.body.exam.passingScore,
          date_from: req.body.exam.date_from,
          date_to: req.body.exam.date_to,
          time_limit: req.body.exam.time_limit,
@@ -122,6 +123,7 @@ const createExam = asyncWrapper(async (req, res, next) => {
          createdBy: mongoose.Types.ObjectId(user.id),
          title: req.body.exam.title,
          subject: req.body.exam.subject,
+         passingScore: req.body.exam.passingScore,
          date_from: req.body.exam.date_from,
          date_to: req.body.exam.date_to,
          time_limit: req.body.exam.time_limit,
@@ -200,6 +202,7 @@ const updateExam = asyncWrapper(async (req, res, next) => {
       const updatedExam = await Exam.findByIdAndUpdate(mongoose.Types.ObjectId(req.params.examId), {
          title: req.body.examData.title,
          subject: req.body.examData.subject,
+         passingScore: req.body.exam.passingScore,
          date_from: req.body.examData.date_from,
          date_to: req.body.examData.date_to,
          time_limit: req.body.examData.time_limit,
@@ -244,6 +247,7 @@ const updateExam = asyncWrapper(async (req, res, next) => {
       const updatedExam = await Exam.findByIdAndUpdate(mongoose.Types.ObjectId(req.params.examId), {
          title: req.body.examData.title,
          subject: req.body.examData.subject,
+         passingScore: req.body.exam.passingScore,
          date_from: req.body.examData.date_from,
          date_to: req.body.examData.date_to,
          time_limit: req.body.examData.time_limit,
@@ -282,12 +286,16 @@ const getExams = asyncWrapper(async (req, res, next) => {
       exams = await Exam.find({
          examCode: { $in: examCodesArr },
       });
+      console.log(exams);
    } else {
       exams = await Exam.find({
          createdBy: mongoose.Types.ObjectId(user.id),
       })
-         .select("_id title date_from date_to totalItems totalPoints status createdAt examCode") //specify fields that are included
+         .select(
+            "_id title date_from date_to totalItems totalPoints status createdAt examCode questionBankId"
+         ) //specify fields that are included
          .sort("-createdAt"); //sort by date created in descending order
+      console.log(exams);
    }
 
    if (!exams) throw new NotFoundError("Something went wrong. Can't find created exams.");
@@ -320,7 +328,7 @@ const getExamDetails = asyncWrapper(async (req, res, next) => {
       if (!exam) throw new NotFoundError("Exam not found.");
 
       //check if student is a registered student for this exam
-      //if there is a result returened, then the student is permitted to access the exam details
+      //if there is a result returned, then the student is permitted to access the exam details
       const isRegistered = await ExamRegisters.findOne({
          user: mongoose.Types.ObjectId(user.id),
          examCode: exam.examCode,
@@ -343,9 +351,22 @@ const getExamDetails = asyncWrapper(async (req, res, next) => {
 
       if (!users) throw new NotFoundError("Users not found.");
 
-      const faculty = await User.findById(exam.createdBy).select("username");
+      const faculty = await User.findById(exam.createdBy).select("-_id username");
 
-      return res.status(200).json({ exam: exam, students: users, faculty: faculty });
+      //question bank will be used to identify if qbank from exam is dependent on other qbanks
+      //if dependent, show + on total points on the frontend
+      const examQuestionBank = await QuestionBank.findOne({
+         _id: mongoose.Types.ObjectId(exam.questionBankId),
+      }).select("-_id questionBanks");
+
+      return res.status(200).json({
+         exam: exam,
+         students: users,
+         faculty: faculty.username,
+         studentInfos: [],
+         isQuestionBankEmpty: examQuestionBank.questionBanks.length === 0,
+         registeredExamStatus: isRegistered.status, //will determine if the status has attempted, or submitted the exam
+      });
    } else {
       const exam = await Exam.findById(mongoose.Types.ObjectId(req.params.examId));
       if (!exam) throw new NotFoundError("Exam not found.");
@@ -362,20 +383,56 @@ const getExamDetails = asyncWrapper(async (req, res, next) => {
       //get list of students
       const registeredStudents = await ExamRegisters.find({
          examCode: exam.examCode,
-      });
+      }).select("-examCode -createdAt -updatedAt -__v"); //exclude fields
 
-      const studentIds = registeredStudents.map((val) => val.user);
+      var studentIds = [];
+      var studentInfos = [];
+      var users = [];
 
-      const users = await User.find({
-         _id: { $in: studentIds },
-      }).select("-password -userType -updatedAt");
+      if (registeredStudents.length > 0) {
+         studentIds = registeredStudents.map((val) => val.user);
 
-      if (!users) throw new NotFoundError("Users not found.");
+         studentInfos = registeredStudents.map((val) => {
+            if (val.status === "unanswered") {
+               return {
+                  user: val.user,
+                  status: val.status,
+               };
+            }
+
+            let examDetails = val.details.exam;
+            return {
+               user: val.details.userId,
+               status: val.status,
+               totalScore: examDetails.totalScore,
+               totalItems: examDetails.totalItems,
+               totalPoints: examDetails.totalPoints,
+               passingScore: examDetails.passingScore,
+               finishedTime: examDetails.finishedTime,
+               startedTime: examDetails.startedTime,
+            };
+         });
+
+         users = await User.find({
+            _id: { $in: studentIds },
+         }).select("-password -userType -updatedAt");
+
+         if (!users) throw new NotFoundError("Users not found.");
+      }
+
+      //question bank will be used to identify if qbank from exam is dependent on other qbanks
+      //if dependent, show + on total points on the frontend
+      const examQuestionBank = await QuestionBank.findOne({
+         _id: mongoose.Types.ObjectId(exam.questionBankId),
+      }).select("-_id questionBanks");
 
       return res.status(200).json({
          exam: exam,
          questionBank: questionBank,
+         faculty: "You",
          students: users,
+         isQuestionBankEmpty: examQuestionBank.questionBanks.length === 0,
+         studentInfos: studentInfos,
       });
    }
 });
@@ -524,7 +581,9 @@ const getExamsFromSubject = asyncWrapper(async (req, res, next) => {
          createdBy: mongoose.Types.ObjectId(user.id),
          subject: req.params.subjectName,
       })
-         .select("_id title date_from date_to totalItems totalPoints status createdAt examCode") //specify fields that are included
+         .select(
+            "_id title date_from date_to totalItems totalPoints status createdAt examCode questionBankId"
+         ) //specify fields that are included
          .sort("-createdAt"); //sort by date created in descending order
    }
 
@@ -589,9 +648,28 @@ const getSubjectNames = asyncWrapper(async (req, res, next) => {
 
 const startExam = asyncWrapper(async (req, res, next) => {
    const user = req.user;
+   var examRegistered = null;
 
    const exam = await Exam.findById(mongoose.Types.ObjectId(req.params.examId));
    if (!exam) throw new NotFoundError("Exam not found");
+
+   const findExamRegistered = await ExamRegisters.findOne({
+      user: user.id,
+      examCode: exam.examCode,
+   });
+
+   if (!findExamRegistered) throw new NotFoundError("Exam not found");
+
+   //only set the status "attempted" when the exam hasnt been answered yet
+   if (findExamRegistered.status === "unanswered") {
+      examRegistered = await ExamRegisters.findOneAndUpdate(
+         { user: user.id, examCode: exam.examCode },
+         { status: "attempted" } //this is important to prevent the student from re-taking the exam
+      );
+      if (!examRegistered) throw new InternalServerError("Failed to update registered exam status");
+   } else {
+      examRegistered = findExamRegistered;
+   }
 
    var questionBank = await QuestionBank.findById(exam.questionBankId);
    if (!questionBank) throw new NotFoundError("Question Bank not found");
@@ -622,6 +700,7 @@ const startExam = asyncWrapper(async (req, res, next) => {
       exam: exam,
       questions: questionBank.questions,
       questionsFromBanks: questionsFromBanks,
+      registeredExamStatus: examRegistered.status,
    });
 });
 
@@ -637,13 +716,78 @@ const submitExam = asyncWrapper(async (req, res, next) => {
          },
          {
             details: req.body.details,
+            status: "submitted",
          }
       );
    } catch (error) {
       throw new InternalServerError("Failed to submit the exam");
    }
 
+   if (!submittedExam) throw new InternalServerError("Failed to submit the exam");
+
    res.status(200).json({ msg: "success" });
+});
+
+const getDates = asyncWrapper(async (req, res, next) => {
+   var user = req.user;
+
+   var exams = [];
+   if (user.userType === "student") {
+      const examRegisters = await ExamRegisters.find({ user: mongoose.Types.ObjectId(user.id) });
+
+      if (!examRegisters) throw new NotFoundError("No registered exams");
+      //extract examCodes into array of strings
+      const examCodesArr = examRegisters.map((val) => val.examCode);
+
+      const statuses = ["posted", "open"];
+
+      exams = await Exam.find({
+         examCode: { $in: examCodesArr },
+         status: { $in: statuses },
+      });
+   } else {
+      const statuses = ["posted", "open"];
+
+      exams = await Exam.find({
+         createdBy: mongoose.Types.ObjectId(user.id),
+         status: { $in: statuses },
+      })
+         .select("_id title date_from date_to totalItems totalPoints status createdAt examCode") //specify fields that are included
+         .sort("-createdAt"); //sort by date created in descending order
+   }
+
+   if (!exams) throw new NotFoundError("Something went wrong. Can't find created exams.");
+
+   //questionBanks will be used to identify if the exam has a question from another question bank
+   const questionBanksArr = exams.map((val) => mongoose.Types.ObjectId(val.questionBankId));
+
+   const questionBanks = await QuestionBank.find({
+      _id: { $in: questionBanksArr },
+   }).select("-_id questionBanks");
+
+   //map the exams array and put a isQuestionBankEmpty property
+   exams = exams.map((val, i) => {
+      val = val.toObject();
+      return {
+         ...val,
+         isQuestionBankEmpty: questionBanks[i].length === 0,
+      };
+   });
+
+   return res.status(200).json({ exams });
+});
+
+const getStudentResults = asyncWrapper(async (req, res, next) => {
+   const user = req.user;
+
+   const studentResults = await ExamRegisters.findOne({
+      user: mongoose.Types.ObjectId(req.params.userId),
+      examCode: req.params.examCode,
+   });
+
+   if (!studentResults) throw new NotFoundError("No results found");
+
+   return res.status(200).json({ msg: "success", results: studentResults.details });
 });
 
 module.exports = {
@@ -657,4 +801,6 @@ module.exports = {
    getExamsFromSubject,
    startExam,
    submitExam,
+   getDates,
+   getStudentResults,
 };

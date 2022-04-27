@@ -21,6 +21,7 @@ const registerUser = async (req, res, next) => {
    //get the request body then extract its contents to create a User in the database
    try {
       await User.create({
+         fullname: req.body.fullname,
          username: req.body.username,
          email: req.body.email,
          password: req.body.pass,
@@ -30,15 +31,18 @@ const registerUser = async (req, res, next) => {
       //MongoServerError: E11000 duplicate key error collection
       //Code 409: 409 Conflict - This response is sent when a request conflicts with the current state of the server.
       if (err.code === 11000) {
-         const error = new Error("Username/Email already exists");
-         error.status = 409;
-         return next(error);
+         // throw new ConflictError("Username/Email already exists");
+         throw new ConflictError("Username/Email is already registered");
+         // const error = new Error("Username/Email already exists");
+         // error.status = 409;
+         // return next(error);
       }
 
       //Code 500: 500 Internal Server Error - The server has encountered a situation it does not know how to handle.
-      const error2 = new Error("Something went wrong. Please try again.");
-      error2.status = 500;
-      return next(error2);
+      throw new InternalServerError("Something went wrong. Please try again.");
+      // const error2 = new Error("Something went wrong. Please try again.");
+      // error2.status = 500;
+      // return next(error2);
    }
 
    res.status(200).json({ status: "ok" });
@@ -75,6 +79,7 @@ const loginUser = asyncWrapper(async (req, res, next) => {
          id: user._id,
          email: user.email,
          username: user.username,
+         fullname: user.fullname,
          userType: user.userType,
       },
       process.env.JWT_SECRET_KEY
@@ -116,12 +121,15 @@ const registerCode = asyncWrapper(async (req, res, next) => {
    //if the it exists, then the user is already registered to specified exam
    if (isUserRegistered) throw new ConflictError("You are already registered to this exam.");
 
-   const registeredExam = await ExamRegisters.create({
-      user: mongoose.Types.ObjectId(user.id),
-      examCode: req.body.examCode,
-   });
-
-   if (!registeredExam) throw new InternalServerError("Failed to register exam");
+   try {
+      const registeredExam = await ExamRegisters.create({
+         user: mongoose.Types.ObjectId(user.id),
+         examCode: req.body.examCode,
+      });
+   } catch (error) {
+      console.log(error);
+      throw new InternalServerError("Failed to register exam");
+   }
 
    return res.status(200).json({ msg: "success" });
 });
@@ -134,6 +142,7 @@ const updateProfile = asyncWrapper(async (req, res, next) => {
       updatedUser = await User.findByIdAndUpdate(
          mongoose.Types.ObjectId(user.id),
          {
+            fullname: req.body.fullname,
             username: req.body.username,
             email: req.body.email,
          },
@@ -150,6 +159,7 @@ const updateProfile = asyncWrapper(async (req, res, next) => {
          id: updatedUser._id,
          email: updatedUser.email,
          username: updatedUser.username,
+         fullname: updatedUser.fullname,
          userType: updatedUser.userType,
       },
       process.env.JWT_SECRET_KEY
