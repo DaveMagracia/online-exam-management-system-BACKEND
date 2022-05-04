@@ -10,6 +10,8 @@ const asyncWrapper = require("../middleware/async");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const mongoose = require("mongoose");
+const path = require("path");
+
 const {
    NotFoundError,
    UnauthenticatedError,
@@ -81,6 +83,7 @@ const loginUser = asyncWrapper(async (req, res, next) => {
          username: user.username,
          fullname: user.fullname,
          userType: user.userType,
+         photo: user.profilePicture,
       },
       process.env.JWT_SECRET_KEY
    );
@@ -140,8 +143,11 @@ const updateProfile = asyncWrapper(async (req, res, next) => {
 
    try {
       updatedUser = await User.findByIdAndUpdate(
-         mongoose.Types.ObjectId(user.id),
+         mongoose.Types.ObjectId(req.params.userId),
          {
+            ...(req.file && {
+               profilePicture: req.params.userId + path.extname(req.file.originalname), //conditionally add this property if the user changed profile picture
+            }),
             fullname: req.body.fullname,
             username: req.body.username,
             email: req.body.email,
@@ -149,7 +155,20 @@ const updateProfile = asyncWrapper(async (req, res, next) => {
          { new: true } //option to return the updated document because the default returns the original/unaltered version before the update
       );
    } catch (err) {
-      throw new ConflictError("Username already exists.");
+      console.log(err);
+      if (err.codeName === "DuplicateKey") {
+         let errorString = "Failed to update profile.";
+
+         if (err.keyPattern.hasOwnProperty("email")) {
+            errorString = "Email already exists.";
+         } else if (err.keyPattern.hasOwnProperty("username")) {
+            errorString = "Username already exists.";
+         }
+
+         throw new ConflictError(errorString);
+      } else {
+         throw new InternalServerError("Failed to update profile.");
+      }
    }
 
    // if (!updatedUser) throw new InternalServerError("Failed to update profile");
@@ -161,9 +180,19 @@ const updateProfile = asyncWrapper(async (req, res, next) => {
          username: updatedUser.username,
          fullname: updatedUser.fullname,
          userType: updatedUser.userType,
+         photo: updatedUser.profilePicture,
       },
       process.env.JWT_SECRET_KEY
    );
+
+   console.log({
+      id: updatedUser._id,
+      email: updatedUser.email,
+      username: updatedUser.username,
+      fullname: updatedUser.fullname,
+      userType: updatedUser.userType,
+      photo: updatedUser.profilePicture,
+   });
 
    res.status(200).json({ msg: "success", token: userToken });
 });

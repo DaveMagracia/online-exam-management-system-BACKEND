@@ -26,6 +26,11 @@ const User = new mongoose.Schema(
          type: String,
          required: true,
       },
+      profilePicture: {
+         type: String,
+         required: false,
+         default: "",
+      },
    },
    //name of the collection to save to
    { timestamps: true, collection: "user-data" }

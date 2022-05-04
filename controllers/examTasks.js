@@ -202,7 +202,7 @@ const updateExam = asyncWrapper(async (req, res, next) => {
       const updatedExam = await Exam.findByIdAndUpdate(mongoose.Types.ObjectId(req.params.examId), {
          title: req.body.examData.title,
          subject: req.body.examData.subject,
-         passingScore: req.body.exam.passingScore,
+         passingScore: req.body.examData.passingScore,
          date_from: req.body.examData.date_from,
          date_to: req.body.examData.date_to,
          time_limit: req.body.examData.time_limit,
@@ -214,7 +214,6 @@ const updateExam = asyncWrapper(async (req, res, next) => {
       });
 
       if (!updatedExam) throw new InternalServerError("Failed to update exam.");
-
       const updatedQuestionBank = await QuestionBank.findByIdAndUpdate(
          mongoose.Types.ObjectId(updatedExam.questionBankId),
          { questions: questions, questionBanks: questionBanks }
@@ -286,7 +285,6 @@ const getExams = asyncWrapper(async (req, res, next) => {
       exams = await Exam.find({
          examCode: { $in: examCodesArr },
       });
-      console.log(exams);
    } else {
       exams = await Exam.find({
          createdBy: mongoose.Types.ObjectId(user.id),
@@ -295,7 +293,6 @@ const getExams = asyncWrapper(async (req, res, next) => {
             "_id title date_from date_to totalItems totalPoints status createdAt examCode questionBankId"
          ) //specify fields that are included
          .sort("-createdAt"); //sort by date created in descending order
-      console.log(exams);
    }
 
    if (!exams) throw new NotFoundError("Something went wrong. Can't find created exams.");
@@ -393,7 +390,7 @@ const getExamDetails = asyncWrapper(async (req, res, next) => {
          studentIds = registeredStudents.map((val) => val.user);
 
          studentInfos = registeredStudents.map((val) => {
-            if (val.status === "unanswered") {
+            if (val.status === "unanswered" || val.status === "attempted") {
                return {
                   user: val.user,
                   status: val.status,
@@ -704,6 +701,52 @@ const startExam = asyncWrapper(async (req, res, next) => {
    });
 });
 
+const generateTOS = asyncWrapper(async (req, res, next) => {
+   const user = req.user;
+
+   const exam = await Exam.findById(mongoose.Types.ObjectId(req.params.examId));
+   if (!exam) throw new NotFoundError("Exam not found");
+
+   var questionBank = await QuestionBank.findById(exam.questionBankId);
+   if (!questionBank) throw new NotFoundError("Question Bank not found");
+
+   //empty array which will contain random questions from the banks
+   var questionsFromBanks = [];
+
+   //get question bank references if questionBanks array is not empty
+   if (questionBank.questionBanks.length > 0) {
+      for (const bankRef of questionBank.questionBanks) {
+         //get all questions from
+         const questionsFromBank = await QuestionBank.findById(
+            mongoose.Types.ObjectId(bankRef.questionBank)
+         ).select("-_id questions");
+         if (!questionBank) throw new NotFoundError("Questions not found");
+
+         //shuffle the array of questions using lodash shuffle function
+         const shuffledQuestions = _.shuffle(questionsFromBank.questions);
+
+         // slice the array
+         const slicedQuestionArr = shuffledQuestions.slice(0, bankRef.noOfQuestions);
+
+         questionsFromBanks = [...questionsFromBanks, ...slicedQuestionArr]; //push the questions to the exam question bank
+      }
+   }
+
+   //get username
+   const faculty = await User.findById(exam.createdBy);
+
+   if (!faculty) throw new NotFoundError("User (Faculty) not found.");
+   const facultyUsername = faculty.username;
+
+   res.status(200).json({
+      msg: "success",
+      exam: exam,
+      facultyUsername: facultyUsername,
+      questions: questionBank.questions,
+      questionsFromBanks: questionsFromBanks,
+   });
+});
+
 const submitExam = asyncWrapper(async (req, res, next) => {
    const user = req.user;
    var submittedExam = null;
@@ -752,7 +795,9 @@ const getDates = asyncWrapper(async (req, res, next) => {
          createdBy: mongoose.Types.ObjectId(user.id),
          status: { $in: statuses },
       })
-         .select("_id title date_from date_to totalItems totalPoints status createdAt examCode") //specify fields that are included
+         .select(
+            "_id title date_from date_to totalItems totalPoints status createdAt examCode questionBankId"
+         ) //specify fields that are included
          .sort("-createdAt"); //sort by date created in descending order
    }
 
@@ -800,6 +845,7 @@ module.exports = {
    getSubjectNames,
    getExamsFromSubject,
    startExam,
+   generateTOS,
    submitExam,
    getDates,
    getStudentResults,
