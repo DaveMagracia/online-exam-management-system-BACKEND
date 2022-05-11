@@ -246,7 +246,7 @@ const updateExam = asyncWrapper(async (req, res, next) => {
       const updatedExam = await Exam.findByIdAndUpdate(mongoose.Types.ObjectId(req.params.examId), {
          title: req.body.examData.title,
          subject: req.body.examData.subject,
-         passingScore: req.body.exam.passingScore,
+         passingScore: req.body.examData.passingScore,
          date_from: req.body.examData.date_from,
          date_to: req.body.examData.date_to,
          time_limit: req.body.examData.time_limit,
@@ -348,7 +348,7 @@ const getExamDetails = asyncWrapper(async (req, res, next) => {
 
       if (!users) throw new NotFoundError("Users not found.");
 
-      const faculty = await User.findById(exam.createdBy).select("-_id username");
+      const faculty = await User.findById(exam.createdBy).select("-_id username fullname");
 
       //question bank will be used to identify if qbank from exam is dependent on other qbanks
       //if dependent, show + on total points on the frontend
@@ -359,7 +359,7 @@ const getExamDetails = asyncWrapper(async (req, res, next) => {
       return res.status(200).json({
          exam: exam,
          students: users,
-         faculty: faculty.username,
+         faculty: faculty.fullname, //changed from username to full name
          studentInfos: [],
          isQuestionBankEmpty: examQuestionBank.questionBanks.length === 0,
          registeredExamStatus: isRegistered.status, //will determine if the status has attempted, or submitted the exam
@@ -736,7 +736,7 @@ const generateTOS = asyncWrapper(async (req, res, next) => {
    const faculty = await User.findById(exam.createdBy);
 
    if (!faculty) throw new NotFoundError("User (Faculty) not found.");
-   const facultyUsername = faculty.username;
+   const facultyUsername = faculty.fullname;
 
    res.status(200).json({
       msg: "success",
@@ -835,6 +835,58 @@ const getStudentResults = asyncWrapper(async (req, res, next) => {
    return res.status(200).json({ msg: "success", results: studentResults.details });
 });
 
+const getStudentActionLog = asyncWrapper(async (req, res, next) => {
+   const user = req.user;
+
+   var studentActionLogs = await ExamRegisters.findOne({
+      user: mongoose.Types.ObjectId(req.params.userId),
+      examCode: req.params.examCode,
+   }).select("-_id details");
+
+   studentActionLogs = studentActionLogs.details;
+
+   //remove unnecessary object properties
+   delete studentActionLogs.results;
+   delete studentActionLogs.questions;
+   delete studentActionLogs.answers;
+
+   if (!studentActionLogs) throw new NotFoundError("No results found");
+
+   return res.status(200).json({ msg: "success", logs: studentActionLogs });
+});
+
+const getAllResults = asyncWrapper(async (req, res, next) => {
+   // response will be used in generating the spreadsheet
+   const user = req.user;
+
+   const studentResults = await ExamRegisters.find(
+      {
+         examCode: req.params.examCode,
+         status: "submitted",
+      },
+      {},
+      { lean: true }
+   );
+
+   // if (!studentResults) throw new NotFoundError("No results found");
+   var userIdArr = studentResults.map((val) => val.user);
+   const userArr = await User.find({ _id: { $in: userIdArr } }).select("username fullname");
+
+   const resultsOptimizedProperties = studentResults.map((val, i) => {
+      let details = {
+         ...val.details,
+         username: userArr[i].username,
+         fullname: userArr[i].fullname,
+      };
+      delete details.actionLog;
+      return details;
+   });
+
+   console.log(resultsOptimizedProperties);
+
+   return res.status(200).json({ msg: "success", results: resultsOptimizedProperties });
+});
+
 module.exports = {
    createExam,
    getExams,
@@ -849,4 +901,6 @@ module.exports = {
    submitExam,
    getDates,
    getStudentResults,
+   getStudentActionLog,
+   getAllResults,
 };

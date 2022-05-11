@@ -15,6 +15,8 @@ const {
    submitExam,
    getDates,
    getStudentResults,
+   getStudentActionLog,
+   getAllResults,
 } = require("../controllers/examTasks");
 
 router
@@ -34,5 +36,7 @@ router
    .delete(authMiddleware, deleteExam)
    .patch(authMiddleware, updateExam);
 router.route("/results/:examCode/:userId").get(authMiddleware, getStudentResults);
+router.route("/results/:examCode").get(authMiddleware, getAllResults);
+router.route("/logs/:examCode/:userId").get(authMiddleware, getStudentActionLog);
 
 module.exports = router;
