@@ -423,6 +423,8 @@ const getExamDetails = asyncWrapper(async (req, res, next) => {
          _id: mongoose.Types.ObjectId(exam.questionBankId),
       }).select("-_id questionBanks");
 
+      console.log(users);
+      console.log(studentInfos);
       return res.status(200).json({
          exam: exam,
          questionBank: questionBank,
@@ -747,6 +749,22 @@ const generateTOS = asyncWrapper(async (req, res, next) => {
    });
 });
 
+const retakeExam = asyncWrapper(async (req, res, next) => {
+   const studentRegister = await ExamRegisters.findOneAndUpdate(
+      {
+         user: mongoose.Types.ObjectId(req.params.userId),
+         examCode: req.params.examCode,
+      },
+      { status: "unanswered" }
+   );
+
+   if (!studentRegister) {
+      throw new InternalServerError("failed to update exam status.");
+   }
+
+   res.status(200).json({ msg: "success" });
+});
+
 const submitExam = asyncWrapper(async (req, res, next) => {
    const user = req.user;
    var submittedExam = null;
@@ -903,4 +921,5 @@ module.exports = {
    getStudentResults,
    getStudentActionLog,
    getAllResults,
+   retakeExam,
 };
