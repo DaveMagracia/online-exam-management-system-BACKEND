@@ -18,6 +18,7 @@ const {
    getStudentActionLog,
    getAllResults,
    retakeExam,
+   showExamResults,
 } = require("../controllers/examTasks");
 
 router
@@ -39,6 +40,7 @@ router
    .patch(authMiddleware, updateExam);
 router.route("/results/:examCode/:userId").get(authMiddleware, getStudentResults);
 router.route("/results/:examCode").get(authMiddleware, getAllResults);
+router.route("/results/show/:examCode").patch(authMiddleware, showExamResults);
 router.route("/logs/:examCode/:userId").get(authMiddleware, getStudentActionLog);
 
 module.exports = router;

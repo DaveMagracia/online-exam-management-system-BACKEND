@@ -43,6 +43,11 @@ const Exam = new mongoose.Schema(
          type: String,
          required: true,
       },
+      isShownResults: {
+         type: Boolean,
+         required: true,
+         default: false,
+      },
       examCode: {
          type: String,
       },

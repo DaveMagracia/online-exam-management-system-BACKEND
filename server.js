@@ -10,6 +10,7 @@ const server = express();
 const connectDB = require("./db/connect");
 const userRoute = require("./routes/user");
 const examRoute = require("./routes/exam");
+const adminRoute = require("./routes/admin");
 const questionBankRoute = require("./routes/bank");
 const notFoundMiddleware = require("./middleware/not-found");
 const errorHandlerMiddleware = require("./middleware/error-handler");
@@ -23,6 +24,7 @@ server.use(cors());
 //if '/user' comes after the base URL, the userRoute will handle the request
 server.use("/user", userRoute);
 server.use("/exams", examRoute);
+server.use("/admin", adminRoute);
 server.use("/question-banks", questionBankRoute);
 //error handler middleware
 server.use(notFoundMiddleware);

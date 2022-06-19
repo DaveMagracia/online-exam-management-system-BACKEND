@@ -423,8 +423,6 @@ const getExamDetails = asyncWrapper(async (req, res, next) => {
          _id: mongoose.Types.ObjectId(exam.questionBankId),
       }).select("-_id questionBanks");
 
-      console.log(users);
-      console.log(studentInfos);
       return res.status(200).json({
          exam: exam,
          questionBank: questionBank,
@@ -800,7 +798,7 @@ const getDates = asyncWrapper(async (req, res, next) => {
       //extract examCodes into array of strings
       const examCodesArr = examRegisters.map((val) => val.examCode);
 
-      const statuses = ["posted", "open"];
+      const statuses = ["posted", "open", "closed"];
 
       exams = await Exam.find({
          examCode: { $in: examCodesArr },
@@ -850,7 +848,17 @@ const getStudentResults = asyncWrapper(async (req, res, next) => {
 
    if (!studentResults) throw new NotFoundError("No results found");
 
-   return res.status(200).json({ msg: "success", results: studentResults.details });
+   const exam = await Exam.findOne({
+      examCode: req.params.examCode,
+   }).select("isShownResults");
+
+   if (!exam) throw new NotFoundError("Exam not found");
+
+   return res.status(200).json({
+      msg: "success",
+      results: studentResults.details,
+      isShownResults: exam.isShownResults,
+   });
 });
 
 const getStudentActionLog = asyncWrapper(async (req, res, next) => {
@@ -900,9 +908,23 @@ const getAllResults = asyncWrapper(async (req, res, next) => {
       return details;
    });
 
-   console.log(resultsOptimizedProperties);
-
    return res.status(200).json({ msg: "success", results: resultsOptimizedProperties });
+});
+
+const showExamResults = asyncWrapper(async (req, res, next) => {
+   // response will be used in generating the spreadsheet
+   const user = req.user;
+
+   const updatedExam = await Exam.findOneAndUpdate(
+      { examCode: req.params.examCode },
+      { isShownResults: req.body.isResultsChecked }
+   );
+
+   if (!updatedExam) throw new InternalServerError("Failed to update exam.");
+
+   return res
+      .status(200)
+      .json({ msg: "success", newIsShownResultsVal: !updatedExam.isShownResults });
 });
 
 module.exports = {
@@ -922,4 +944,5 @@ module.exports = {
    getStudentActionLog,
    getAllResults,
    retakeExam,
+   showExamResults,
 };

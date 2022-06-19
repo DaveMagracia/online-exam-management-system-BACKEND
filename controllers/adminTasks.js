@@ -2,8 +2,9 @@
 const express = require("express");
 //models
 const User = require("../models/User.model");
-const Exam = require("../models/Exam.model");
 const Admin = require("../models/Admin.model");
+const WebsiteContent = require("../models/WebsiteContent.model");
+const Exam = require("../models/Exam.model");
 const ExamRegisters = require("../models/ExamRegisters.model");
 //middlewares
 const asyncWrapper = require("../middleware/async");
@@ -53,53 +54,14 @@ const registerUser = async (req, res, next) => {
 
 // the "asyncWrapper" will make the code shorter.
 // It will prevent the repetitive use of the try/catch block which makes code longer
-const loginUser = asyncWrapper(async (req, res, next) => {
-   //check if input is email or username
-   let emailRegex = /^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$/;
-   let email_username = req.body.email_username;
-   let isEmail = emailRegex.test(email_username);
 
-   const user = await User.findOne({
-      //if input is an email find for 'email' property, else find for username
-      [isEmail ? "email" : "username"]: email_username,
-   });
-
-   if (!user) throw new NotFoundError("No such user exists.");
-
-   //bcrpyt will compare the actual password input, with the encrypted password in the database
-   const isMatch = await bcrypt.compare(req.body.pass, user.password);
-   //if user is not found
-   if (!isMatch) throw new UnauthenticatedError("Invalid credentials.");
-
-   //if user exists, then create a token
-   //The jwt token's purpose is to send back a base64 encoded response containing the info of the user
-
-   //example of sent token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6Im1hcmtkYXZoZWVkQGdtYWlsLmNvbSIsInVzZXJuYW1lIjoiTmV3VXNlcjEiLCJpYXQiOjE2NDg5ODM5MTB9.QyKMJDLmNBQJP9u09eb2A5yV9ihD5NzyUWbCyYxytZY"
-   //the string between the two periods are the encrypted info
-   //to test, perform an atob('string') on the chrome console
-   const userToken = jwt.sign(
-      {
-         id: user._id,
-         email: user.email,
-         username: user.username,
-         fullname: user.fullname,
-         userType: user.userType,
-         photo: user.profilePicture,
-      },
-      process.env.JWT_SECRET_KEY
-   );
-
-   return res.json({ status: "ok", user: userToken });
-});
-
-//moved to adminTasks.js
 const loginAdmin = asyncWrapper(async (req, res, next) => {
    //check if input is email or username
    let emailRegex = /^[a-zA-Z0-9.!#$%&’*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$/;
    let email_username = req.body.email_username;
    let isEmail = emailRegex.test(email_username);
 
-   const user = await User.findOne({
+   const user = await Admin.findOne({
       //if input is an email find for 'email' property, else find for username
       [isEmail ? "email" : "username"]: email_username,
    });
@@ -149,62 +111,23 @@ const getUserInfo = async (req, res, next) => {
    });
 };
 
-const registerCode = asyncWrapper(async (req, res, next) => {
-   const user = req.user;
-
-   //find first if the code provided is a code of an existing exam
-   const exam = await Exam.findOne({ examCode: req.body.examCode });
-
-   if (!exam) throw new NotFoundError("No exam with such code exists.");
-
-   const isUserRegistered = await ExamRegisters.findOne({
-      user: mongoose.Types.ObjectId(user.id),
-      examCode: req.body.examCode,
-   });
-
-   //if the it exists, then the user is already registered to specified exam
-   if (isUserRegistered) throw new ConflictError("You are already registered to this exam.");
-
-   try {
-      const registeredExam = await ExamRegisters.create({
-         user: mongoose.Types.ObjectId(user.id),
-         examCode: req.body.examCode,
-      });
-   } catch (error) {
-      console.log(error);
-      throw new InternalServerError("Failed to register exam");
-   }
-
-   return res.status(200).json({ msg: "success" });
-});
-
 const updateProfile = asyncWrapper(async (req, res, next) => {
    const user = req.user;
    var udpatedUser = null;
-   console.log(user);
-   try {
-      var newObj = {
-         ...(req.file && {
-            profilePicture: req.params.userId + path.extname(req.file.originalname), //conditionally add this property if the user changed profile picture
-         }),
-         fullname: req.body.fullname,
-         username: req.body.username,
-         email: req.body.email,
-      };
 
-      if (user.userType === "admin") {
-         updatedUser = await Admin.findByIdAndUpdate(
-            mongoose.Types.ObjectId(req.params.userId),
-            newObj,
-            { new: true } //option to return the updated document because the default returns the original/unaltered version before the update
-         );
-      } else {
-         updatedUser = await User.findByIdAndUpdate(
-            mongoose.Types.ObjectId(req.params.userId),
-            newObj,
-            { new: true } //option to return the updated document because the default returns the original/unaltered version before the update
-         );
-      }
+   try {
+      updatedUser = await User.findByIdAndUpdate(
+         mongoose.Types.ObjectId(req.params.userId),
+         {
+            ...(req.file && {
+               profilePicture: req.params.userId + path.extname(req.file.originalname), //conditionally add this property if the user changed profile picture
+            }),
+            fullname: req.body.fullname,
+            username: req.body.username,
+            email: req.body.email,
+         },
+         { new: true } //option to return the updated document because the default returns the original/unaltered version before the update
+      );
    } catch (err) {
       console.log(err);
       if (err.codeName === "DuplicateKey") {
@@ -250,19 +173,11 @@ const updateProfile = asyncWrapper(async (req, res, next) => {
 
 const changePassword = asyncWrapper(async (req, res, next) => {
    const user = req.user;
-   var findUser = null;
+   const findUser = await User.findOne({
+      _id: mongoose.Types.ObjectId(user.id),
+   });
 
-   if (user.userType === "admin") {
-      findUser = await Admin.findOne({
-         _id: mongoose.Types.ObjectId(user.id),
-      });
-      if (!findUser) throw new NotFoundError("User not found.");
-   } else {
-      findUser = await User.findOne({
-         _id: mongoose.Types.ObjectId(user.id),
-      });
-      if (!findUser) throw new NotFoundError("User not found.");
-   }
+   if (!findUser) throw new NotFoundError("User not found.");
 
    //check first if old password is correct
    const isMatch = await bcrypt.compare(req.body.pass, findUser.password);
@@ -272,30 +187,56 @@ const changePassword = asyncWrapper(async (req, res, next) => {
    //hash the new password and set it as the new password
    const newHashedPassword = await bcrypt.hash(req.body.newpass, 8);
 
-   if (user.userType === "admin") {
-      const updatedUser = await Admin.findByIdAndUpdate(mongoose.Types.ObjectId(findUser._id), {
-         password: newHashedPassword,
-      });
-      console.log(updatedUser);
+   const updatedUser = await User.findByIdAndUpdate(mongoose.Types.ObjectId(findUser._id), {
+      password: newHashedPassword,
+   });
 
-      if (!updatedUser) throw new InternalServerError("Failed to update password.");
-   } else {
-      const updatedUser = await User.findByIdAndUpdate(mongoose.Types.ObjectId(findUser._id), {
-         password: newHashedPassword,
-      });
-      if (!updatedUser) throw new InternalServerError("Failed to update password.");
-   }
+   if (!updatedUser) throw new InternalServerError("Failed to update password.");
 
    res.status(200).json({ msg: "success" });
+});
+
+const updateWebsite = asyncWrapper(async (req, res, next) => {
+   const updatedContent = await WebsiteContent.findOneAndUpdate(
+      { name: "content" },
+      {
+         ...(req.file && {
+            logo: "logo" + path.extname(req.file.originalname), //conditionally add this property if the user changed profile picture
+         }),
+         ...(req.body.image === "ExamplifyLogo.png" && {
+            logo: "ExamplifyLogo.png", //conditionally add this property if the user changed profile picture
+         }),
+         title: req.body.title,
+         vision: req.body.vision,
+         mission: req.body.mission,
+         go: req.body.go,
+         isVisionEnabled: req.body.isVisionEnabled,
+         isMissionEnabled: req.body.isMissionEnabled,
+         isGoEnabled: req.body.isGoEnabled,
+      },
+      { new: true }
+   );
+
+   if (!updatedContent) throw new InternalServerError("Failed to update website content");
+
+   res.status(200).json({ msg: "success" });
+});
+
+const getContent = asyncWrapper(async (req, res, next) => {
+   const contents = await WebsiteContent.findOne({ name: "content" });
+
+   if (!contents) throw new NotFoundError("Content not found");
+
+   res.status(200).json({ msg: "success", contents: contents });
 });
 
 //export the functions to be used in routes/user.js
 module.exports = {
    registerUser,
-   loginUser,
    loginAdmin,
    getUserInfo,
-   registerCode,
    updateProfile,
    changePassword,
+   updateWebsite,
+   getContent,
 };
