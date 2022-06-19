@@ -9,6 +9,8 @@ const {
    registerCode,
    updateProfile,
    changePassword,
+   addToDo,
+   getToDo,
 } = require("../controllers/userTasks");
 const multer = require("multer");
 const path = require("path");
@@ -34,5 +36,7 @@ router.route("/info").get(authMiddleware, getUserInfo);
 router.route("/").patch(authMiddleware, changePassword);
 router.route("/:userId").put(authMiddleware, upload.single("photo"), updateProfile);
 router.route("/exam-code").post(authMiddleware, registerCode);
+router.route("/addtodolist").post(authMiddleware, addToDo);
+router.route("/getTodo").get(authMiddleware, getToDo);
 
 module.exports = router;

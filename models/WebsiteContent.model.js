@@ -19,6 +19,11 @@ const WebsiteContent = new mongoose.Schema(
          required: true,
          unique: false,
       },
+      announcements: {
+         type: String,
+         required: true,
+         unique: true,
+      },
       vision: {
          type: String,
          required: true,

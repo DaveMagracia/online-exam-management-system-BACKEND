@@ -289,6 +289,33 @@ const changePassword = asyncWrapper(async (req, res, next) => {
    res.status(200).json({ msg: "success" });
 });
 
+const addToDo = asyncWrapper(async (req, res, next) => {
+   console.log(req.body);
+
+   const user = req.user;
+   const updatedTodoList = await User.findByIdAndUpdate(mongoose.Types.ObjectId(user.id), {
+      todoList: req.body,
+   });
+   console.log(updatedTodoList);
+
+   if (!updatedTodoList) throw new InternalServerError("failed to update todo field");
+
+   res.status(200).json({ msg: "success" });
+});
+
+const getToDo = asyncWrapper(async (req, res, next) => {
+   const user = req.user;
+   console.log(user.id);
+   const userToDolist = await User.findById(mongoose.Types.ObjectId(user.id)).select(
+      "_id todoList"
+   );
+   console.log(userToDolist);
+
+   if (!userToDolist) throw new InternalServerError("failed to get todo list");
+
+   res.status(200).json({ msg: "success", todoList: userToDolist });
+});
+
 //export the functions to be used in routes/user.js
 module.exports = {
    registerUser,
@@ -298,4 +325,6 @@ module.exports = {
    registerCode,
    updateProfile,
    changePassword,
+   addToDo,
+   getToDo,
 };

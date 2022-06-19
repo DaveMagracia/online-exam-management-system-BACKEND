@@ -31,6 +31,11 @@ const User = new mongoose.Schema(
          required: false,
          default: "",
       },
+      todoList: {
+         type: Array,
+         required: false,
+         default: [],
+      },
    },
    //name of the collection to save to
    { timestamps: true, collection: "user-data" }

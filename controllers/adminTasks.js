@@ -208,6 +208,7 @@ const updateWebsite = asyncWrapper(async (req, res, next) => {
          }),
          title: req.body.title,
          vision: req.body.vision,
+         announcements: req.body.announcements,
          mission: req.body.mission,
          go: req.body.go,
          isVisionEnabled: req.body.isVisionEnabled,
